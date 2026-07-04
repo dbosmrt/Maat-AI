@@ -11,39 +11,14 @@ import os
 import time
 from typing import List
 
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
 from agent.state import AgentState
-from agent.model import EmbeddingModels
+from agent.utils.embedding_utils import get_vector_store, VECTOR_STORE_DIR
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Define default vector store directory relative to this script
-VECTOR_STORE_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../../../vector_store")
-)
-
-
-def get_vector_store(embeddings=None) -> Chroma:
-    """
-    Initializes and returns the Chroma vector store connection.
-    Optionally accepts a pre-built embeddings instance (e.g. from fallback logic).
-    """
-    if embeddings is None:
-        embeddings = EmbeddingModels.get_nemotron_embed()
-    
-    # Ensure vector store directory exists
-    os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
-    
-    vectorstore = Chroma(
-        collection_name="legal_rag",
-        embedding_function=embeddings,
-        persist_directory=VECTOR_STORE_DIR,
-    )
-    return vectorstore
 
 
 def embedding_node(state: AgentState) -> dict:

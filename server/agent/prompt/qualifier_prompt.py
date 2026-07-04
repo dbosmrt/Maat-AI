@@ -7,7 +7,7 @@ CRITICAL RULES:
 - `requires_case_law` must be FALSE unless the user explicitly types words like "cases", "judgments", "case study", "supreme court ruling", or "give me an example of a past case".
 - If they ask "What is the punishment for X", `requires_case_law` is FALSE.
 - If they ask "What does section Y say", `requires_case_law` is FALSE.
-- If the user is just saying hello, asking how you are, or making small talk, `is_general_chat` is TRUE.
+- If the user is just saying hello, asking how you are, or making small talk which is not related to the Legal domain, `is_general_chat` is TRUE.
 
 EXAMPLES:
 User: "What is the punishment for theft under the BNS?"
