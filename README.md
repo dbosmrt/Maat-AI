@@ -47,26 +47,26 @@ Ma'at is powered by a **Self-Corrective RAG** pipeline orchestrated via **LangGr
 
 ```mermaid
 flowchart LR
-    subgraph INPUT["📥 Input"]
+    subgraph INPUT[" Input "]
         U["User Query"]
     end
 
-    subgraph PREPROCESS["🧠 Pre-Processing"]
+    subgraph PREPROCESS[" Pre-Processing "]
         QD["Query Decomposer"]
         QF["Qualifier"]
     end
 
-    subgraph RAG["⚡ Hybrid RAG Engine"]
+    subgraph RAG[" Hybrid RAG Engine "]
         RT["Retriever\n(Dense + BM25 + RRF)"]
         RR["Re-Ranker\n(LLM Filter)"]
     end
 
-    subgraph SELF_CORRECT["🔄 Self-Corrective Loop"]
+    subgraph SELF_CORRECT[" Self-Corrective Loop "]
         GR["Grader"]
         RW["Rewriter"]
     end
 
-    subgraph OUTPUT["📤 Output"]
+    subgraph OUTPUT[" Output "]
         WS["Web Search\n(DuckDuckGo)"]
         GN["Generator"]
     end
@@ -75,23 +75,23 @@ flowchart LR
     QF -->|"Legal Query"| RT
     QF -->|"General Chat"| GN
     RT --> RR --> GR
-    GR -->|"✅ Relevant"| GN
-    GR -->|"❌ Irrelevant\n(retry < 2)"| RW
-    GR -->|"🌐 Needs Case Law\nor Max Retries"| WS
+    GR -->|"Relevant"| GN
+    GR -->|"Irrelevant\n(retry < 2)"| RW
+    GR -->|"Needs Case Law\nor Max Retries"| WS
     RW -->|"Rewritten Query"| RT
     WS --> GN
-    GN --> END["✨ Response"]
+    GN --> DONE["Response"]
 ```
 
 ### Self-Corrective RAG — Detailed Node Flow
 
 ```mermaid
 graph TD
-    START(("▶ START")) --> query_decomposer
+    START(("START")) --> query_decomposer
 
-    subgraph PRE["Pre-Processing"]
-        query_decomposer["🔍 Query Decomposer\n━━━━━━━━━━━━━━━━━━━━\n• Splits query into semantic,\n  statutory & procedural focus\n• Infers legal domain"]
-        qualifier["🏷️ Qualifier\n━━━━━━━━━━━━━━━━━━━━\n• Classifies: Criminal / Civil / General\n• Detects scenario vs direct question\n• Flags case law requirement\n• Detects general chat"]
+    subgraph PRE [" Pre-Processing "]
+        query_decomposer["Query Decomposer\n---\nSplits query into semantic,\nstatutory and procedural focus.\nInfers legal domain."]
+        qualifier["Qualifier\n---\nClassifies: Criminal / Civil / General.\nDetects scenario vs direct question.\nFlags case law requirement.\nDetects general chat."]
     end
 
     query_decomposer --> qualifier
@@ -99,56 +99,46 @@ graph TD
     qualifier -->|"is_general_chat = True"| generator
     qualifier -->|"is_general_chat = False"| retriever
 
-    subgraph RETRIEVAL["Hybrid Retrieval"]
-        retriever["📚 Retriever\n━━━━━━━━━━━━━━━━━━━━\n• Dense: NVIDIA Nemotron Embeddings\n• Sparse: BM25 keyword index\n• Reciprocal Rank Fusion (RRF)\n• Exponential backoff + fallback models\n• On retry: uses rewritten raw query"]
-        reranker["🎯 Re-Ranker\n━━━━━━━━━━━━━━━━━━━━\n• LLM evaluates each chunk\n• Returns indices of relevant docs\n• Filters noise before grading"]
+    subgraph RETRIEVAL [" Hybrid Retrieval "]
+        retriever["Retriever\n---\nDense: NVIDIA Nemotron Embeddings.\nSparse: BM25 keyword index.\nReciprocal Rank Fusion.\nExponential backoff + fallback.\nOn retry: uses rewritten raw query."]
+        reranker["Re-Ranker\n---\nLLM evaluates each chunk.\nReturns indices of relevant docs.\nFilters noise before grading."]
     end
 
     retriever --> reranker
 
-    subgraph GRADING["Self-Corrective Grading"]
-        grader["⚖️ Grader\n━━━━━━━━━━━━━━━━━━━━\n• LLM scores: is_relevant, diversity,\n  context_relevance_score (0.0–1.0)\n• Code override: score < 0.5 → irrelevant\n• Routes to rewriter, web search,\n  or generator"]
-        rewriter["✏️ Rewriter\n━━━━━━━━━━━━━━━━━━━━\n• Optimizes query for vector search\n• Strips filler, adds synonyms\n• Increments iteration_count"]
+    subgraph GRADING [" Self-Corrective Grading "]
+        grader["Grader\n---\nLLM scores: is_relevant, diversity,\ncontext_relevance_score 0.0 to 1.0.\nCode override: score below 0.5 = irrelevant.\nRoutes to rewriter, web search,\nor generator."]
+        rewriter["Rewriter\n---\nOptimizes query for vector search.\nStrips filler, adds synonyms.\nIncrements iteration_count."]
     end
 
     reranker --> grader
 
     grader -->|"retry_retrieval = True\n(iteration < MAX_RETRIES)"| rewriter
-    rewriter -->|"Rewritten query\n→ back to retriever"| retriever
+    rewriter -->|"Rewritten query\nback to retriever"| retriever
 
     grader -->|"search_required = True\n(case law or max retries)"| web_search
 
-    subgraph OUTPUT_NODES["Response Generation"]
-        web_search["🌐 Web Search\n━━━━━━━━━━━━━━━━━━━━\n• DuckDuckGo (region: India)\n• LLM summarizes long queries\n  into 2-3 focused searches\n• Deduplicates by URL"]
-        generator["💬 Generator\n━━━━━━━━━━━━━━━━━━━━\n• Synthesizes final answer from:\n  - Internal statutes (ChromaDB)\n  - External case laws (Web)\n  - Memory summary\n• Markdown formatted output\n• Inline source citations"]
+    subgraph OUTPUT_NODES [" Response Generation "]
+        web_search["Web Search\n---\nDuckDuckGo region: India.\nLLM summarizes long queries\ninto 2-3 focused searches.\nDeduplicates by URL."]
+        generator["Generator\n---\nSynthesizes final answer from:\nInternal statutes via ChromaDB,\nExternal case laws via Web,\nand Memory summary.\nMarkdown formatted output\nwith inline source citations."]
     end
 
-    grader -->|"is_relevant = True\n(score ≥ 0.5)"| generator
+    grader -->|"is_relevant = True\n(score >= 0.5)"| generator
     web_search --> generator
-    generator --> END_NODE(("⏹ END"))
-
-    style START fill:#4CAF50,stroke:#388E3C,color:#fff
-    style END_NODE fill:#f44336,stroke:#c62828,color:#fff
-    style PRE fill:#E3F2FD,stroke:#1565C0
-    style RETRIEVAL fill:#FFF3E0,stroke:#E65100
-    style GRADING fill:#FCE4EC,stroke:#AD1457
-    style OUTPUT_NODES fill:#E8F5E9,stroke:#2E7D32
+    generator --> END_NODE(("END"))
 ```
 
 ### Data Ingestion Pipeline
 
 ```mermaid
 flowchart LR
-    subgraph INGEST["📄 Document Ingestion"]
+    subgraph INGEST [" Document Ingestion "]
         PDF["Raw PDF Files"] --> ING["Ingestion Node\n(Docling / Unstructured)"]
         ING --> CLN["Cleaning Node\n(Markdown sanitization)"]
         CLN --> CHK["Chunking Node\n(Heading-aware splitting)"]
         CHK --> EMB["Embedding Node\n(NVIDIA nv-embedqa-e5-v5)"]
         EMB --> VDB[("ChromaDB\nVector Store")]
     end
-
-    style INGEST fill:#F3E5F5,stroke:#6A1B9A
-    style VDB fill:#FFF9C4,stroke:#F57F17
 ```
 
 ### Node Responsibility Matrix
