@@ -1,8 +1,10 @@
 import logging
+import traceback
 from langchain_core.output_parsers import StrOutputParser
 from agent.state import AgentState
 from agent.model import ChatModels
 from agent.prompt.generator_prompt import get_generator_prompt
+from agent.utils.logger import log_node_event, log_system_error
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +50,7 @@ def generator_node(state: AgentState) -> dict:
         })
         
         logger.info("Generator Node: Response successfully generated.")
+        log_node_event("generator_node", "SUCCESS")
         
         return {
             "generation": generation
@@ -55,4 +58,6 @@ def generator_node(state: AgentState) -> dict:
         
     except Exception as e:
         logger.error(f"Generator node failed: {e}")
+        log_system_error(traceback.format_exc())
+        log_node_event("generator_node", "FAILURE", error_payload=str(e))
         return {"generation": "I apologize, but I encountered an internal error while generating your legal response. Please try again."}

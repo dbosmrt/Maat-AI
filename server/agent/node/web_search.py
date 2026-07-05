@@ -92,9 +92,13 @@ def web_search_node(state: AgentState) -> dict:
                     
         logger.info(f"Web Search Node: Found {len(all_results)} unique external results.")
         
+        log_node_event("web_search_node", "SUCCESS")
+        
         return {
             "case_laws": all_results
         }
     except Exception as e:
         logger.error(f"Web Search Node failed: {e}")
+        log_system_error(traceback.format_exc())
+        log_node_event("web_search_node", "FAILURE", error_payload=str(e))
         return {"case_laws": []}

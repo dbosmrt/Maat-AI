@@ -2,6 +2,7 @@ import logging
 import time
 from agent.state import AgentState
 from agent.model import EmbeddingModels
+from agent.utils.embedding_utils import get_vector_store
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 
@@ -26,6 +27,13 @@ def reciprocal_rank_fusion(results_lists, k=60):
     return reranked_results
 
 _cached_bm25_retriever = None
+
+def invalidate_bm25_cache():
+    """Clears the cached BM25 retriever so it is rebuilt on next query.
+    Call this after ingesting new documents into ChromaDB."""
+    global _cached_bm25_retriever
+    _cached_bm25_retriever = None
+    logger.info("BM25 cache invalidated. Will rebuild on next retrieval.")
 
 def _get_bm25_retriever(vectorstore):
     global _cached_bm25_retriever
@@ -52,31 +60,36 @@ def retriever_node(state: AgentState) -> dict:
     """
     Retrieves the top k most relevant document chunks from ChromaDB based on the user's query.
     Uses semantic search with automatic embedding model fallback and exponential backoff.
+    On retry iterations (iteration_count > 0), uses the rewritten raw query directly
+    since the decomposed_query is stale from the first pass.
     """
     query = state.get("query", "")
     decomposed = state.get("decomposed_query", {})
+    iteration_count = state.get("iteration_count", 0)
     
     if not query:
         logger.warning("retriever_node: No query found in state.")
         return {"documents": []}
-        
-    semantic = decomposed.get("semantic_focus", "")
-    statutory = decomposed.get("statutory_focus", "")
-    procedural = decomposed.get("procedural_focus", "")
     
-    # Construct a hybrid search string optimized for both sparse and dense layers
-    hybrid_query = f"{semantic} {statutory} {procedural}".strip()
-    if not hybrid_query:
+    # On retry iterations, the rewriter has rewritten the raw query but
+    # decomposed_query is stale from pass 1. Use raw query directly.
+    if iteration_count > 0:
         hybrid_query = query
+        logger.info(f"Retry iteration {iteration_count}: using rewritten raw query for retrieval.")
+    else:
+        semantic = decomposed.get("semantic_focus", "")
+        statutory = decomposed.get("statutory_focus", "")
+        procedural = decomposed.get("procedural_focus", "")
+        # Construct a hybrid search string optimized for both sparse and dense layers
+        hybrid_query = f"{semantic} {statutory} {procedural}".strip()
+        if not hybrid_query:
+            hybrid_query = query
         
     logger.info(f"Retrieving context for hybrid query: '{hybrid_query}'")
     
     # --- Attempt 1: Use primary embedding model with exponential backoff ---
     max_retries = 5
     base_delay = 2  # seconds
-    
-    # Needs get_vector_store
-    from agent.node.embedding import get_vector_store
     
     for attempt in range(max_retries):
         try:

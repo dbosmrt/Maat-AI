@@ -41,27 +41,128 @@ The system utilizes an advanced **Multi-Agent Orchestration workflow (LangGraph)
 
 ##  System Architecture
 
-Ma'at is built on a highly modular Multi-Agent workflow. When a user submits a query, it is analyzed for intent (e.g., standard question vs. hypothetical scenario), retrieved via a vector search, and then vigorously evaluated by a **Grader Node**. If the retrieved documents are deemed irrelevant, the **Rewriter Node** restructures the query and attempts retrieval again.
+Ma'at is powered by a **Self-Corrective RAG** pipeline orchestrated via **LangGraph**. Every query passes through intelligent classification, hybrid retrieval (dense + sparse), LLM-based re-ranking, automated document grading, and — if context is insufficient — an iterative rewrite-and-retry loop before falling back to live web search.
+
+### High-Level Pipeline
+
+```mermaid
+flowchart LR
+    subgraph INPUT["📥 Input"]
+        U["User Query"]
+    end
+
+    subgraph PREPROCESS["🧠 Pre-Processing"]
+        QD["Query Decomposer"]
+        QF["Qualifier"]
+    end
+
+    subgraph RAG["⚡ Hybrid RAG Engine"]
+        RT["Retriever\n(Dense + BM25 + RRF)"]
+        RR["Re-Ranker\n(LLM Filter)"]
+    end
+
+    subgraph SELF_CORRECT["🔄 Self-Corrective Loop"]
+        GR["Grader"]
+        RW["Rewriter"]
+    end
+
+    subgraph OUTPUT["📤 Output"]
+        WS["Web Search\n(DuckDuckGo)"]
+        GN["Generator"]
+    end
+
+    U --> QD --> QF
+    QF -->|"Legal Query"| RT
+    QF -->|"General Chat"| GN
+    RT --> RR --> GR
+    GR -->|"✅ Relevant"| GN
+    GR -->|"❌ Irrelevant\n(retry < 2)"| RW
+    GR -->|"🌐 Needs Case Law\nor Max Retries"| WS
+    RW -->|"Rewritten Query"| RT
+    WS --> GN
+    GN --> END["✨ Response"]
+```
+
+### Self-Corrective RAG — Detailed Node Flow
 
 ```mermaid
 graph TD
-    A["User Query + Chat History"] --> B["Intent & Scenario Classifier"]
-    
-    B -->|"Story/Scenario detected"| C["Scenario Issue Extractor"]
-    C --> D
-    B -->|"Direct Query"| D["ChromaDB Retriever"]
-    
-    D --> E["Document Grader Node"]
-    E -->|"Docs Relevant"| F["Conditional Router"]
-    E -->|"Docs Irrelevant"| G["Query Rewriter Node"]
-    G --> D
-    
-    F -->|"Case Law explicitly requested"| H["Case Law Research Agent"]
-    F -->|"Standard Legal Query"| I["Generator Node"]
-    
-    H --> I
-    I --> J["Final Output & History Update"]
+    START(("▶ START")) --> query_decomposer
+
+    subgraph PRE["Pre-Processing"]
+        query_decomposer["🔍 Query Decomposer\n━━━━━━━━━━━━━━━━━━━━\n• Splits query into semantic,\n  statutory & procedural focus\n• Infers legal domain"]
+        qualifier["🏷️ Qualifier\n━━━━━━━━━━━━━━━━━━━━\n• Classifies: Criminal / Civil / General\n• Detects scenario vs direct question\n• Flags case law requirement\n• Detects general chat"]
+    end
+
+    query_decomposer --> qualifier
+
+    qualifier -->|"is_general_chat = True"| generator
+    qualifier -->|"is_general_chat = False"| retriever
+
+    subgraph RETRIEVAL["Hybrid Retrieval"]
+        retriever["📚 Retriever\n━━━━━━━━━━━━━━━━━━━━\n• Dense: NVIDIA Nemotron Embeddings\n• Sparse: BM25 keyword index\n• Reciprocal Rank Fusion (RRF)\n• Exponential backoff + fallback models\n• On retry: uses rewritten raw query"]
+        reranker["🎯 Re-Ranker\n━━━━━━━━━━━━━━━━━━━━\n• LLM evaluates each chunk\n• Returns indices of relevant docs\n• Filters noise before grading"]
+    end
+
+    retriever --> reranker
+
+    subgraph GRADING["Self-Corrective Grading"]
+        grader["⚖️ Grader\n━━━━━━━━━━━━━━━━━━━━\n• LLM scores: is_relevant, diversity,\n  context_relevance_score (0.0–1.0)\n• Code override: score < 0.5 → irrelevant\n• Routes to rewriter, web search,\n  or generator"]
+        rewriter["✏️ Rewriter\n━━━━━━━━━━━━━━━━━━━━\n• Optimizes query for vector search\n• Strips filler, adds synonyms\n• Increments iteration_count"]
+    end
+
+    reranker --> grader
+
+    grader -->|"retry_retrieval = True\n(iteration < MAX_RETRIES)"| rewriter
+    rewriter -->|"Rewritten query\n→ back to retriever"| retriever
+
+    grader -->|"search_required = True\n(case law or max retries)"| web_search
+
+    subgraph OUTPUT_NODES["Response Generation"]
+        web_search["🌐 Web Search\n━━━━━━━━━━━━━━━━━━━━\n• DuckDuckGo (region: India)\n• LLM summarizes long queries\n  into 2-3 focused searches\n• Deduplicates by URL"]
+        generator["💬 Generator\n━━━━━━━━━━━━━━━━━━━━\n• Synthesizes final answer from:\n  - Internal statutes (ChromaDB)\n  - External case laws (Web)\n  - Memory summary\n• Markdown formatted output\n• Inline source citations"]
+    end
+
+    grader -->|"is_relevant = True\n(score ≥ 0.5)"| generator
+    web_search --> generator
+    generator --> END_NODE(("⏹ END"))
+
+    style START fill:#4CAF50,stroke:#388E3C,color:#fff
+    style END_NODE fill:#f44336,stroke:#c62828,color:#fff
+    style PRE fill:#E3F2FD,stroke:#1565C0
+    style RETRIEVAL fill:#FFF3E0,stroke:#E65100
+    style GRADING fill:#FCE4EC,stroke:#AD1457
+    style OUTPUT_NODES fill:#E8F5E9,stroke:#2E7D32
 ```
+
+### Data Ingestion Pipeline
+
+```mermaid
+flowchart LR
+    subgraph INGEST["📄 Document Ingestion"]
+        PDF["Raw PDF Files"] --> ING["Ingestion Node\n(Docling / Unstructured)"]
+        ING --> CLN["Cleaning Node\n(Markdown sanitization)"]
+        CLN --> CHK["Chunking Node\n(Heading-aware splitting)"]
+        CHK --> EMB["Embedding Node\n(NVIDIA nv-embedqa-e5-v5)"]
+        EMB --> VDB[("ChromaDB\nVector Store")]
+    end
+
+    style INGEST fill:#F3E5F5,stroke:#6A1B9A
+    style VDB fill:#FFF9C4,stroke:#F57F17
+```
+
+### Node Responsibility Matrix
+
+| Node | Purpose | Input | Output | Error Fallback |
+|------|---------|-------|--------|----------------|
+| **Query Decomposer** | Splits raw query into semantic, statutory, procedural focuses | `query` | `decomposed_query` | Falls back to raw query as semantic focus |
+| **Qualifier** | Classifies intent, domain, scenario type | `query` | `law_domain`, `is_scenario`, `requires_case_law`, `is_general_chat` | Defaults to `General` domain, no case law |
+| **Retriever** | Hybrid dense+sparse search with RRF fusion | `query`, `decomposed_query`, `iteration_count` | `documents` (top 20 chunks) | Tries fallback embedding model, then returns empty |
+| **Re-Ranker** | LLM filters irrelevant chunks | `query`, `documents` | `documents` (filtered) | Returns all documents unfiltered |
+| **Grader** | Evaluates document sufficiency | `query`, `documents`, `requires_case_law`, `iteration_count` | `search_required`, `retry_retrieval` | Routes to generator with whatever context exists |
+| **Rewriter** | Optimizes query for better retrieval | `query`, `iteration_count` | Rewritten `query`, incremented `iteration_count` | Keeps original query, still increments count |
+| **Web Search** | DuckDuckGo search for case laws | `query`, `requires_case_law` | `case_laws` | Returns empty list |
+| **Generator** | Synthesizes final legal response | `query`, `documents`, `case_laws`, `memory_summary`, `is_scenario` | `generation` | Returns error message |
 
 ---
 
@@ -98,10 +199,12 @@ Navigate to **`http://localhost:8000`** in your browser. The single container se
 
 We are constantly iterating to make Ma'at more powerful and robust. Current efforts include:
 
-* **Hybrid Search Implementation:** Upgrading the retrieval pipeline to use a combination of BM25 (keyword matching) and NVIDIA Nemotron dense vector embeddings to solve metadata-filtering blind spots.
-* **Tool Calling Agent Middleware:** Decoupling tool execution logic from primary agents to allow for real-time external API requests (e.g., live legal database scraping).
-* **Automated Legal Form Generation:** Integrating the LLM outputs dynamically into hardcoded HTML/Markdown templates to spit out production-ready legal forms.
-* **Expanded Case Law Analysis:** Deepening the Case Law Agent's capability to cross-reference conflicting judicial precedents.
+* ✅ ~~**Hybrid Search (BM25 + Dense + RRF):**~~ *Shipped.* Retrieval now fuses keyword and semantic results via Reciprocal Rank Fusion.
+* ✅ ~~**Self-Corrective RAG Loop:**~~ *Shipped.* Grader → Rewriter → Retriever retry loop with max-iteration circuit breaker.
+* 🔄 **Hallucination Guard Node:** Post-generation verification that cited sections actually appear in the provided context.
+* 🔄 **Tool Calling Agent Middleware:** Decoupling tool execution logic from primary agents to allow for real-time external API requests (e.g., live legal database scraping).
+* 🔄 **Automated Legal Form Generation:** Integrating the LLM outputs dynamically into hardcoded HTML/Markdown templates to spit out production-ready legal forms.
+* 🔄 **Expanded Case Law Analysis:** Deepening the Case Law Agent's capability to cross-reference conflicting judicial precedents.
 
 ---
 
