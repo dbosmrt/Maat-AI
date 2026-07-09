@@ -59,8 +59,8 @@ class EmbeddingModels:
         Tries each embedding model in FALLBACK_MODELS order.
         Returns the first one that successfully embeds a test string.
         """
-        import logging
-        logger = logging.getLogger(__name__)
+        from agent.utils.logger import get_logger
+        logger = get_logger(__name__)
         
         for model_id in EmbeddingModels.FALLBACK_MODELS:
             try:

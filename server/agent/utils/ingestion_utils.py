@@ -1,7 +1,7 @@
-import logging
+from agent.utils.logger import get_logger
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def validate_paths(input_dir: str, output_dir: str) -> bool:
     """Checks if directories exist and ensures output directory is created."""

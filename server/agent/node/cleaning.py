@@ -5,15 +5,13 @@ This module provides a LangGraph node that cleans the raw Markdown
 produced by the ingestion step.
 """
 
-import logging
+from agent.utils.logger import get_logger
 from pathlib import Path
 
 from agent.state import AgentState
 from agent.utils.cleaning_utils import clean_markdown_text
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def cleaning_node(state: AgentState) -> dict:

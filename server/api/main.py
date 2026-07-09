@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+import uuid
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from api.routes import router
+from agent.utils.logger import get_logger, set_correlation_id
 
 # Ensure .env is loaded
 from pathlib import Path
@@ -12,6 +14,8 @@ try:
     load_dotenv(env_path)
 except ImportError:
     pass
+
+logger = get_logger(__name__)
 
 app = FastAPI(
     title="Ma-at Legal AI API",
@@ -27,6 +31,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Correlation ID Middleware — tags every request with a unique trace ID
+
+@app.middleware("http")
+async def correlation_id_middleware(request: Request, call_next):
+    """Injects a correlation ID into every request for distributed tracing."""
+    cid = request.headers.get("X-Correlation-ID", str(uuid.uuid4())[:8])
+    set_correlation_id(cid)
+    logger.info(f"{request.method} {request.url.path} [cid={cid}]")
+    response = await call_next(request)
+    response.headers["X-Correlation-ID"] = cid
+    logger.info(f"{request.method} {request.url.path} → {response.status_code} [cid={cid}]")
+    return response
+
 
 # Register routes
 app.include_router(router)
@@ -47,7 +66,10 @@ if static_dir.exists():
             return FileResponse(path)
         return FileResponse(static_dir / "index.html")
 
+logger.info("Ma-at Legal AI API initialized successfully.")
+
 if __name__ == "__main__":
     import uvicorn
     # When run directly
     uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
+

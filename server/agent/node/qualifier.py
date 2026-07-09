@@ -1,14 +1,11 @@
-import logging
+from agent.utils.logger import get_logger, log_node_event, log_system_error
 from langchain_core.output_parsers import JsonOutputParser
 from agent.state import AgentState, QueryClassification
 from agent.model import ChatModels
 from agent.prompt.qualifier_prompt import get_qualifier_prompt
-from agent.utils.logger import log_node_event, log_system_error
 import traceback
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def qualifier_node(state: AgentState) -> dict:
     """

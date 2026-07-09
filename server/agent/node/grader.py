@@ -1,14 +1,12 @@
-import logging
+from agent.utils.logger import get_logger, log_node_event, log_system_error, LOG_DIR
 from langchain_core.output_parsers import JsonOutputParser
 from agent.state import AgentState, DocumentGrade
 from agent.model import ChatModels
 from agent.prompt.grader_prompt import get_grader_prompt
-from agent.utils.logger import log_node_event, log_system_error
+import os
 import traceback
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Circuit-breaker: max retry iterations before falling back to web search
 MAX_RETRIEVAL_RETRIES = 2
@@ -84,8 +82,6 @@ def grader_node(state: AgentState) -> dict:
         if relevance_score < 0.4:
             warning_msg = f"[{query}] Critical Context Starvation! Score: {relevance_score}. Diversity: {diversity_analysis}"
             logger.warning(warning_msg)
-            import os
-            from agent.utils.logger import LOG_DIR
             health_log = os.path.join(LOG_DIR, "retrieval_health_warnings.log")
             with open(health_log, "a") as f:
                 f.write(warning_msg + "\n")

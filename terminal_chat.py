@@ -3,6 +3,7 @@ import sys
 import uuid
 import json
 import logging
+from agent.utils.logger import get_logger
 from typing import List
 
 # Suppress verbose node logging to keep the terminal UI clean

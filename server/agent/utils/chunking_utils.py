@@ -1,11 +1,11 @@
-import logging
+from agent.utils.logger import get_logger
 from pathlib import Path
 from typing import List
 
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def chunk_markdown_file(file_path: str) -> List[Document]:
     """

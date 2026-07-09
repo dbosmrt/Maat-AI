@@ -1,4 +1,4 @@
-import logging
+from agent.utils.logger import get_logger
 import time
 from agent.state import AgentState
 from agent.model import EmbeddingModels
@@ -6,9 +6,7 @@ from agent.utils.embedding_utils import get_vector_store
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def reciprocal_rank_fusion(results_lists, k=60):
     fused_scores = {}

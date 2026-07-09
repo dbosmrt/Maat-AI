@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import time
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends
 from langchain_core.messages import HumanMessage, AIMessage
@@ -9,6 +10,9 @@ from api.models import ChatRequest, ChatResponse, StartSessionResponse, ChatHist
 from api.security import get_api_key
 from agent.chat_graph import build_chat_graph
 from agent.state import AgentState
+from agent.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -45,6 +49,7 @@ def start_chat(api_key: str = Depends(get_api_key)):
     """Initializes a new chat session."""
     session_id = str(uuid.uuid4())[:8]
     _save_session_file(session_id, "", [])
+    logger.info(f"New chat session created: {session_id}")
     return StartSessionResponse(session_id=session_id, message="Session started successfully.")
 
 @router.get("/api/v1/chat/sessions", response_model=SessionListResponse)
@@ -76,8 +81,10 @@ def delete_session(session_id: str, api_key: str = Depends(get_api_key)):
     """Deletes a chat session file."""
     filepath = os.path.join(CHAT_DIR, f"{session_id}.json")
     if not os.path.exists(filepath):
+        logger.warning(f"Attempted to delete non-existent session: {session_id}")
         raise HTTPException(status_code=404, detail="Session not found")
     os.remove(filepath)
+    logger.info(f"Chat session deleted: {session_id}")
     return {"status": "ok", "message": f"Session {session_id} deleted."}
 
 @router.get("/api/v1/chat/{session_id}", response_model=ChatHistoryResponse)
@@ -95,16 +102,22 @@ def get_chat_history(session_id: str, api_key: str = Depends(get_api_key)):
 @router.post("/api/v1/chat/{session_id}", response_model=ChatResponse)
 def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(get_api_key)):
     """Core RAG inference endpoint. Use 'new' as the session_id to automatically generate a new chat session."""
+    start_time = time.perf_counter()
+    
     if session_id.lower() == "new":
         session_id = str(uuid.uuid4())[:8]
         # Initialize an empty session file
         _save_session_file(session_id, "", [])
         data = {"session_id": session_id, "memory_summary": "", "history": []}
+        logger.info(f"Auto-created new session: {session_id}")
     else:
         data = _load_session_file(session_id)
         if not data:
+            logger.warning(f"Chat invoked on non-existent session: {session_id}")
             raise HTTPException(status_code=404, detail="Session not found. Provide a valid session ID or use 'new'.")
             
+    logger.info(f"Chat invoked on session {session_id}: '{request.query[:80]}...'")
+    
     memory_summary = data.get("memory_summary", "")
     raw_history = data.get("history", [])
     
@@ -138,6 +151,8 @@ def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(ge
     try:
         result = chat_graph.invoke(state)
     except Exception as e:
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
+        logger.error(f"Pipeline failed after {elapsed_ms:.0f}ms for session {session_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Pipeline error: {str(e)}")
         
     generation = result.get("generation", "Failed to generate response.")
@@ -149,6 +164,9 @@ def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(ge
     
     # In a real system, the memory summary would be updated here.
     _save_session_file(session_id, memory_summary, raw_history)
+    
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+    logger.info(f"Chat completed for session {session_id} in {elapsed_ms:.0f}ms | domain={domain}")
     
     return ChatResponse(
         session_id=session_id,

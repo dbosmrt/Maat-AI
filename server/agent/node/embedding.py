@@ -6,7 +6,7 @@ documents (with metadata), embedding them using the NVIDIA Nemotron
 embedding model, and storing them in the ChromaDB vector store.
 """
 
-import logging
+from agent.utils.logger import get_logger
 import os
 import time
 from typing import List
@@ -16,9 +16,7 @@ from langchain_core.documents import Document
 from agent.state import AgentState
 from agent.utils.embedding_utils import get_vector_store, VECTOR_STORE_DIR
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def embedding_node(state: AgentState) -> dict:

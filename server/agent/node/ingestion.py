@@ -3,7 +3,7 @@ Document Ingestion Node for Legal RAG Chatbot.
 This module orchestrates the PDF ingestion process by utilizing functions
 from ingestion_utils.py.
 """
-import logging
+from agent.utils.logger import get_logger
 from pathlib import Path
 
 from agent.state import AgentState
@@ -13,9 +13,7 @@ from agent.utils.ingestion_utils import (
     parse_pdf_with_unstructured
 )
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def process_pdf_with_fallback(pdf_path: str, output_dir: str) -> bool:
     """

@@ -1,15 +1,12 @@
-import logging
+from agent.utils.logger import get_logger, log_node_event, log_system_error
 from duckduckgo_search import DDGS
 from langchain_core.output_parsers import JsonOutputParser
 from agent.state import AgentState, SearchQueries
 from agent.model import ChatModels
 from agent.prompt.search_query_prompt import get_search_query_prompt
-from agent.utils.logger import log_node_event, log_system_error
 import traceback
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Maximum raw query length before we invoke the LLM summarizer
 QUERY_SUMMARIZE_THRESHOLD = 120

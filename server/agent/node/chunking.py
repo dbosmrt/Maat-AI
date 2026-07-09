@@ -4,15 +4,13 @@ Markdown Chunking Module for Legal RAG Chatbot.
 This module provides a LangGraph node that chunks large Markdown files.
 """
 
-import logging
+from agent.utils.logger import get_logger
 from pathlib import Path
 
 from agent.state import AgentState
 from agent.utils.chunking_utils import chunk_markdown_file
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def chunking_node(state: AgentState) -> dict:
     """

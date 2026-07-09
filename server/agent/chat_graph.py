@@ -1,4 +1,4 @@
-import logging
+from agent.utils.logger import get_logger
 from langgraph.graph import StateGraph, START, END
 
 from agent.state import AgentState
@@ -11,9 +11,7 @@ from agent.node.web_search import web_search_node
 from agent.node.generator import generator_node
 from agent.node.rewriter import rewriter_node
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def build_chat_graph():
     """

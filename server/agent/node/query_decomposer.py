@@ -1,13 +1,10 @@
-import logging
+from agent.utils.logger import get_logger, log_node_event, log_system_error
 import traceback
 from agent.state import AgentState, DecomposedQuery
 from agent.model import ChatModels
 from agent.prompt.query_decomposer_prompt import get_query_decomposer_prompt
-from agent.utils.logger import log_node_event, log_system_error
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def query_decomposer_node(state: AgentState) -> dict:
     """
