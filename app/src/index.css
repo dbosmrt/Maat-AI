@@ -1,7 +1,7 @@
-/* ═══════════════════════════════════════════════════════════════
+/*
    Ma'at Legal AI — Design System
    Dark theme with gold accents inspired by Egyptian Ma'at
-   ═══════════════════════════════════════════════════════════════ */
+ */
 
 /* ── CSS Custom Properties ── */
 :root {
@@ -34,7 +34,7 @@
   --bubble-ai: #12121f;
 
   /* Misc */
-  --danger: #e05555;
+  --danger: #ef5c5c;
   --danger-hover: #cc4444;
   --success: #4caf7d;
   --radius-sm: 8px;
@@ -56,13 +56,17 @@
 }
 
 /* ── Reset & Base ── */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
   overflow: hidden;
@@ -81,20 +85,23 @@ body {
 ::-webkit-scrollbar {
   width: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--border-subtle);
   border-radius: var(--radius-full);
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 
-/* ════════════════════════════════════════════════════════════
+/* 
    SPLASH SCREEN
-   ════════════════════════════════════════════════════════════ */
+ */
 
 .splash-screen {
   position: fixed;
@@ -152,9 +159,9 @@ body {
   }
 }
 
-/* ════════════════════════════════════════════════════════════
+/* 
    APP LAYOUT
-   ════════════════════════════════════════════════════════════ */
+  */
 
 .app-layout {
   display: flex;
@@ -165,12 +172,14 @@ body {
 }
 
 @keyframes fadeIn {
-  to { opacity: 1; }
+  to {
+    opacity: 1;
+  }
 }
 
-/* ════════════════════════════════════════════════════════════
+/* 
    SIDEBAR
-   ════════════════════════════════════════════════════════════ */
+*/
 
 .sidebar {
   width: var(--sidebar-width);
@@ -361,9 +370,9 @@ body {
   height: 20px;
 }
 
-/* ════════════════════════════════════════════════════════════
+/*
    CHAT AREA
-   ════════════════════════════════════════════════════════════ */
+*/
 
 .chat-area {
   flex: 1;
@@ -598,19 +607,23 @@ body {
 }
 
 @keyframes typingBounce {
-  0%, 80%, 100% {
+
+  0%,
+  80%,
+  100% {
     transform: scale(0.8);
     opacity: 0.4;
   }
+
   40% {
     transform: scale(1);
     opacity: 1;
   }
 }
 
-/* ════════════════════════════════════════════════════════════
+/* 
    CHAT INPUT
-   ════════════════════════════════════════════════════════════ */
+    */
 
 .chat-input-wrapper {
   padding: 16px 24px 24px;
@@ -694,9 +707,9 @@ body {
   margin-right: auto;
 }
 
-/* ════════════════════════════════════════════════════════════
+/*
    EMPTY STATE IN SESSION LIST
-   ════════════════════════════════════════════════════════════ */
+   */
 
 .sessions-empty {
   display: flex;
@@ -719,9 +732,9 @@ body {
   line-height: 1.5;
 }
 
-/* ════════════════════════════════════════════════════════════
+/* 
    RESPONSIVE
-   ════════════════════════════════════════════════════════════ */
+   */
 
 @media (max-width: 768px) {
   .sidebar {
@@ -768,9 +781,9 @@ body {
   }
 }
 
-/* ════════════════════════════════════════════════════════════
+/* 
    MARKDOWN STYLES
-   ════════════════════════════════════════════════════════════ */
+*/
 
 .markdown-body {
   font-size: 0.9rem;
@@ -785,9 +798,9 @@ body {
   margin-bottom: 0;
 }
 
-.markdown-body h1, 
-.markdown-body h2, 
-.markdown-body h3, 
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
 .markdown-body h4 {
   color: var(--accent-gold);
   margin-top: 1em;
@@ -804,7 +817,7 @@ body {
   font-size: 1rem;
 }
 
-.markdown-body ul, 
+.markdown-body ul,
 .markdown-body ol {
   margin-left: 1.2em;
   margin-bottom: 0.6em;
@@ -816,18 +829,18 @@ body {
 }
 
 /* Fix for react-markdown wrapping text in <p> inside <li> */
-.markdown-body li > p {
+.markdown-body li>p {
   margin-top: 0;
   margin-bottom: 0.2em;
 }
 
-.markdown-body li > p:last-child {
+.markdown-body li>p:last-child {
   margin-bottom: 0;
 }
 
 /* Tighter nested lists */
-.markdown-body li > ul,
-.markdown-body li > ol {
+.markdown-body li>ul,
+.markdown-body li>ol {
   margin-top: 0.2em;
   margin-bottom: 0.2em;
 }
@@ -844,7 +857,7 @@ body {
   border: 1px solid var(--border-subtle);
 }
 
-.markdown-body th, 
+.markdown-body th,
 .markdown-body td {
   border: 1px solid var(--border-subtle);
   padding: 8px 12px;
