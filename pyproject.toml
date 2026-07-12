@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "maat-ai"
-version = 0.0.1
+version = "0.0.1"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.68.0",
@@ -39,3 +39,5 @@ classifiers = [
 [project.urls]
 Repository = "https://github.com/dbosmrt/Ma-at-"
 
+[tool.uv]
+package = false 
