@@ -33,6 +33,40 @@ class ChatModels:
         max_tokens=100000,
     )
 
+    @staticmethod
+    def get_glm5_2() -> ChatNVIDIA:
+        
+        return ChatNVIDIA(
+        model="z-ai/glm-5.2",
+        api_key=_get_nvidia_api_key(),
+        temperature=0.6,
+        top_p=0.95,
+        max_tokens=100000,
+        seed=42
+    )
+
+    @staticmethod
+    def get_sarvam_m() -> ChatNVIDIA:
+        
+        return ChatNVIDIA(
+        model="sarvamai/sarvam-m",
+        api_key=_get_nvidia_api_key(),
+        temperature=0.6,
+        top_p=0.95,
+        max_tokens=100000,
+    )
+
+    @staticmethod
+    def get_minmax_m3() -> ChatNVIDIA:
+        
+        return ChatNVIDIA(
+        model="minimaxai/minimax-m3",
+        api_key=_get_nvidia_api_key(),
+        temperature=0.6,
+        top_p=0.95,
+        max_tokens=100000,
+    )
+
 
 
 class EmbeddingModels:

@@ -1,9 +1,9 @@
 """
 Embedding Node Module for Legal RAG Chatbot.
 
-This module provides the LangGraph node responsible for taking chunked 
-documents (with metadata), embedding them using the NVIDIA Nemotron 
-embedding model, and storing them in the ChromaDB vector store.
+This module provides the LangGraph node responsible for taking chunked
+documents (with metadata), embedding them using the NVIDIA Nemotron
+embedding model, and storing them in the Pinecone vector store.
 """
 
 from agent.utils.logger import get_logger
@@ -14,7 +14,7 @@ from typing import List
 from langchain_core.documents import Document
 
 from agent.state import AgentState
-from agent.utils.embedding_utils import get_vector_store, VECTOR_STORE_DIR
+from agent.utils.embedding_utils import VectorDatabases
 
 logger = get_logger(__name__)
 
@@ -31,15 +31,15 @@ def embedding_node(state: AgentState) -> dict:
         logger.warning("embedding_node skipped: No documents found in state to embed.")
         return {"ingest_status": "Failed: No documents to embed"}
         
-    logger.info("Initializing Chroma vector store at %s...", VECTOR_STORE_DIR)
-    
+    logger.info("Initializing Pinecone vector store...")
+
     try:
-        vectorstore = get_vector_store()
+        vectorstore = VectorDatabases.get_pinecone_db()
         
         # Batch add documents to vector store
         logger.info("Adding %d documents to the vector store...", len(documents))
         
-        # ChromaDB automatically handles chunking for the DB insertion and embedding API
+        # Pinecone automatically handles chunking for the DB insertion and embedding API
         # but large batches might hit NVIDIA API rate limits or CUDA OOM, so we add them in smaller batches.
         batch_size = 16
         for i in range(0, len(documents), batch_size):
