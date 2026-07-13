@@ -20,7 +20,7 @@ def qualifier_node(state: AgentState) -> dict:
     logger.info(f"Qualifying query: {query}")
     
     # Initialize the LLM (NVIDIA Nemotron)
-    llm = ChatModels.get_nemotron3super()
+    llm = ChatModels.get_sarvam_m()
     
     # Bind the Pydantic schema using structured output
     structured_llm = llm.with_structured_output(QueryClassification)

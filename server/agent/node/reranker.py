@@ -22,7 +22,7 @@ def reranker_node(state: AgentState) -> dict:
     logger.info(f"Re-ranking {len(documents)} retrieved documents...")
     
     # Initialize LLM and Parser
-    llm = ChatModels.get_nemotron3super()
+    llm = ChatModels.get_sarvam_m()
     structured_llm = llm.with_structured_output(DocumentRanking)
     
     # Format the documents for the prompt

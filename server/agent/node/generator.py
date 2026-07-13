@@ -26,7 +26,7 @@ def generator_node(state: AgentState) -> dict:
     memory_text = memory_summary if memory_summary else "No prior conversation history."
     
     # Initialize LLM and Parser
-    llm = ChatModels.get_nemotron3super()
+    llm = ChatModels.get_sarvam_m()
     parser = StrOutputParser()
     
     # Customize instructions based on whether it is a hypothetical scenario or direct question

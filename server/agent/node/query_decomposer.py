@@ -19,7 +19,7 @@ def query_decomposer_node(state: AgentState) -> dict:
         
     logger.info("Decomposing query for hybrid retrieval...")
     
-    llm = ChatModels.get_nemotron3super()
+    llm = ChatModels.get_sarvam_m()
     structured_llm = llm.with_structured_output(DecomposedQuery)
     prompt = get_query_decomposer_prompt()
     chain = prompt | structured_llm

@@ -18,7 +18,7 @@ def _summarize_query(query: str) -> list[str]:
     Falls back to a truncated version of the raw query if the LLM fails.
     """
     try:
-        llm = ChatModels.get_nemotron3super()
+        llm = ChatModels.get_sarvam_m()
         structured_llm = llm.with_structured_output(SearchQueries)
         prompt = get_search_query_prompt()
         

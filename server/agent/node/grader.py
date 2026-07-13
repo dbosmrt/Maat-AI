@@ -45,7 +45,7 @@ def grader_node(state: AgentState) -> dict:
         
     logger.info("Grader Node: Evaluating document relevance...")
     
-    llm = ChatModels.get_nemotron3super()
+    llm = ChatModels.get_sarvam_m()
     structured_llm = llm.with_structured_output(DocumentGrade)
     
     # Format documents

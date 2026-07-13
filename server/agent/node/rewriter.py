@@ -17,7 +17,7 @@ def rewriter_node(state: AgentState) -> dict:
     
     logger.info(f"Rewriting query for better retrieval (Iteration {iteration_count + 1}). Original: {query}")
     
-    llm = ChatModels.get_nemotron3super()
+    llm = ChatModels.get_sarvam_m()
     prompt = get_rewriter_prompt()
     chain = prompt | llm | StrOutputParser()
     
