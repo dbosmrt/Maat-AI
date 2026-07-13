@@ -2,9 +2,9 @@
 
 ## 1. THE "WHY" ENCODING (INTENT & VALUES)
 
-Core Value: Demo Survival. We have 24 hours. A simple, working MVP is infinitely more valuable than a complex, broken app.
+Core Value: Excellence and Evolution. Having established and validated our MVP foundation, we now focus on enhancing capabilities, expanding features, and improving performance while maintaining our commitment to stability and legal accuracy.
 
-Architecture Intent: Stability > Features. We use a strict Template-Based RAG approach. The AI extracts JSON; the backend injects it into hardcoded HTML/Markdown templates.
+Architecture Intent: Stability with Enhancement. We maintain our strong Template-Based RAG foundation while thoughtfully extending capabilities through additional model options and refined agent behaviors.
 
 Domain Constraint: Absolute strict adherence to provided legal context. Zero legal hallucination is permitted.
 
@@ -89,31 +89,56 @@ PDF Gen: reportlab or pdfkit
 Linting: Pylint -> cd server && pylint main.py llm_service.py rag_engine.py
 
 ## 7. DIRECTORY STRUCTURE
-
 /
 ├── app/                        # React Frontend (Vite)
 │   ├── src/
 │   │   ├── api.ts              # Fetch wrappers for FastAPI endpoints
 │   │   ├── components/         # ChatUI, HistorySidebar, ScenarioInput
 │   │   └── App.tsx             # Main Layout
-├── server/                     # FastAPI Backend
-│   ├── main.py                 # FastAPI application & REST endpoints
-│   ├── rag_engine.py           # ChromaDB retriever & vector search logic
-│   ├── llm_service.py          # OpenAI-compatible API wrappers
-│   └── agent/
+├── server/                     # Backend Services
+│   ├── api/                    # FastAPI Application
+│   │   ├── main.py             # FastAPI application & REST endpoints
+│   │   ├── models.py           # Pydantic models for request/validation
+│   │   ├── routes.py           # API route definitions
+│   │   └── security.py         # Authentication and security utilities
+│   └── agent/                  # AI Agent Logic (LangGraph)
+│       ├── chat_graph.py       # LangGraph orchestration (graph compilation)
+│       ├── model.py            # Embedding & Chat Model initialization (NVIDIA NIM)
 │       ├── state.py            # LangGraph TypedDict definitions (State schema)
-│       ├── llm.py              # Embedding & Chat Model initialization
-│       ├── history.py          # Chat history session manager & summarization logic
-│       ├── graph.py            # LangGraph orchestration (compiling the nodes)
-│       └── node/               # Individual LangGraph nodes
-│           ├── classifier.py   # Intent & Scenario routing
-│           ├── retriever.py    # Fetches from vector DB
-│           ├── grader.py       # Evaluates document relevance
-│           ├── rewriter.py     # Rewrites query if docs are irrelevant
-│           ├── researcher.py   # Conditional Case Law fetcher
-│           └── generator.py    # Final legal synthesis & formatting
-├── data/                       # Raw PDFs & Vector Store storage
-└── vector_store/               # Locally persisted ChromaDB files
+│       ├── node/               # Individual LangGraph Nodes
+│       │   ├── chunking.py     # Markdown document chunking
+│       │   ├── cleaning.py     # Markdown text cleaning
+│       │   ├── embedding.py    # Document embedding and vector storage
+│       │   ├── generator.py    # Final legal synthesis and response generation
+│       │   ├── grader.py       # Document relevance grading
+│       │   ├── ingestion.py    # PDF document ingestion and processing
+│       │   ├── qualifier.py    # Query intent and scenario classification
+│       │   ├── query_decomposer.py # Query decomposition for hybrid retrieval
+│       │   ├── reranker.py     # Document re-ranking for relevance filtering
+│       │   ├── retriever.py    # Vector database retrieval
+│       │   ├── rewriter.py     # Query rewriting for better retrieval
+│       │   └── web_search.py   # External web search for case law
+│       ├── prompt/             # LangChain Prompt Templates
+│       │   ├── generator_prompt.py
+│       │   ├── grader_prompt.py
+│       │   ├── qualifier_prompt.py
+│       │   ├── query_decomposer_prompt.py
+│       │   ├── reranker_prompt.py
+│       │   ├── rewriter_prompt.py
+│       │   ├── search_query_prompt.py
+│       │   └── __init__.py
+│       └── utils/              # Utility Functions
+│           ├── logger.py       # Centralized logging configuration
+│           ├── embedding_utils.py # Vector database helper functions
+│           ├── chunking_utils.py # Markdown text chunking utilities
+│           ├── cleaning_utils.py # Text cleaning and normalization
+│           └── ingestion_utils.py # Document processing helpers
+├── data/                       # Raw PDF source documents
+└── vector_store/              # Persistent ChromaDB vector database
+├── requirements.txt           # Python backend dependencies
+├── package.json               # Frontend Node.js dependencies
+├── Dockerfile                 # Containerization configuration
+└── .env                       # Environment variables (API keys, configuration)
 
 ## 8. IMPLEMENTATION PLAN: ADVANCED RAG & AGENTS
 
