@@ -3,7 +3,7 @@ LangGraph State definition for the Legal RAG Chatbot.
 """
 
 import operator
-from typing import TypedDict, List, Annotated, Literal
+from typing import TypedDict, List, Annotated, Literal, Optional
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,10 @@ class DocumentGrade(BaseModel):
     )
     context_relevance_score: float = Field(
         description="A score from 0.0 to 1.0 based on how well the chunks align with the user query."
+    )
+    failure_reason: Optional[str] = Field(
+        default=None,
+        description="If the documents are not relevant, the reason why (e.g., MISSING_KEY_CONCEPT, INSUFFICIENT_CONTEXT_DEPTH, WRONG_JURISDICTION_FOCUS, TEMPORAL_MISMATCH, AMBIGUOUS_QUERY)."
     )
 
 class SearchQueries(BaseModel):

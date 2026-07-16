@@ -3,13 +3,11 @@ from langchain_core.output_parsers import JsonOutputParser
 from agent.state import AgentState, DocumentGrade
 from agent.model import ChatModels
 from agent.prompt.grader_prompt import get_grader_prompt
+from agent.utils.grader_utils import calculate_max_retries
 import os
 import traceback
 
 logger = get_logger(__name__)
-
-# Circuit-breaker: max retry iterations before falling back to web search
-MAX_RETRIEVAL_RETRIES = 2
 
 # Minimum score to accept LLM's is_relevant=True verdict.
 # Below this, we override to False regardless of LLM output.
@@ -36,7 +34,8 @@ def grader_node(state: AgentState) -> dict:
     # Heuristic 2: If no documents survived the re-ranker, we must search.
     if not documents:
         iteration_count = state.get("iteration_count", 0)
-        if iteration_count < MAX_RETRIEVAL_RETRIES:
+        max_retries = calculate_max_retries(state.get("decomposed_query", {}))
+        if iteration_count < max_retries:
             logger.info(f"Grader Node: No documents provided (Iteration {iteration_count}). Routing to Rewriter.")
             return {"search_required": False, "retry_retrieval": True}
         else:
@@ -65,8 +64,11 @@ def grader_node(state: AgentState) -> dict:
         is_relevant = grade_dict.get("is_relevant", False)
         relevance_score = grade_dict.get("context_relevance_score", 1.0)
         diversity_analysis = grade_dict.get("chunk_diversity", "")
+        failure_reason = grade_dict.get("failure_reason", None)
         
         logger.info(f"Grader Evaluation -> Relevance: {is_relevant} | Score: {relevance_score} | Diversity: {diversity_analysis}")
+        if failure_reason:
+            logger.info(f"Grader Failure Reason: {failure_reason}")
         
         # Code-level safety override: if the LLM said relevant but score is
         # below our minimum threshold, override to irrelevant. This prevents
@@ -92,7 +94,8 @@ def grader_node(state: AgentState) -> dict:
             return {"search_required": False, "retry_retrieval": False}
         else:
             iteration_count = state.get("iteration_count", 0)
-            if iteration_count < MAX_RETRIEVAL_RETRIES:
+            max_retries = calculate_max_retries(state.get("decomposed_query", {}))
+            if iteration_count < max_retries:
                 logger.info(f"Grader Node: Documents are irrelevant (Iteration {iteration_count}). Retrying retrieval loop.")
                 log_node_event("grader_node", "RETRY")
                 return {"search_required": False, "retry_retrieval": True}
