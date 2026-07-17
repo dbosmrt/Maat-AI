@@ -1,6 +1,5 @@
 """
 Ma-at Advanced Logging Configuration
-=====================================
 
 Production-grade logging with two operational modes:
   - DEVELOPER mode: Colorful, verbose console output for local debugging.

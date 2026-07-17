@@ -15,7 +15,7 @@ from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from agent.chat_graph import build_chat_graph
 from agent.state import AgentState
 
-CHAT_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "chats")
+CHAT_DIR = os.path.join(os.path.dirname(__file__), "data", "chats")
 os.makedirs(CHAT_DIR, exist_ok=True)
 
 class TerminalChat:

@@ -1,6 +1,6 @@
 import os
 from langchain_chroma import Chroma
-from langchain_pinecone import PineconeVectorStore
+# Pinecone import lazy-loaded to avoid hard dependency if not used
 from agent.model import EmbeddingModels
 
 # Define default vector store directory relative to this script
@@ -30,11 +30,19 @@ class VectorDatabases:
         return vectorstore
 
     @staticmethod
-    def get_pinecone_db(embeddings=None) -> PineconeVectorStore:
+    def get_pinecone_db(embeddings=None):
         """
         Initializes and returns the Pinecone vector store connection.
         Optionally accepts a pre-built embeddings instance (e.g. from fallback logic).
         """
+        # Lazy import pinecone only when needed
+        try:
+            from langchain_pinecone import PineconeVectorStore
+        except ImportError as e:
+            raise ImportError(
+                "Pinecone dependencies not installed. Install pinecone-client and langchain-pinecone to use Pinecone."
+            ) from e
+
         if embeddings is None:
             embeddings = EmbeddingModels.get_nemotron_embed()
 
@@ -48,3 +56,11 @@ class VectorDatabases:
             pinecone_api_key=api_key,
         )
         return vectorstore
+
+
+# Module-level convenience functions (for backward compatibility)
+def get_vector_store(embeddings=None):
+    return VectorDatabases.get_vector_store(embeddings)
+
+def get_pinecone_db(embeddings=None):
+    return VectorDatabases.get_pinecone_db(embeddings)

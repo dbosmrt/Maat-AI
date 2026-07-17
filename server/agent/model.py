@@ -118,4 +118,3 @@ class EmbeddingModels:
             api_key=_get_nvidia_api_key(),
             truncate="END",
         )
-
