@@ -30,7 +30,7 @@ def query_decomposer_node(state: AgentState) -> dict:
             "format_instructions": "Format: STRICT JSON MATCH. DO NOT USE MARKDOWN."
         })
         
-        decomposed_dict = decomposed.dict() if hasattr(decomposed, "dict") else dict(decomposed)
+        decomposed_dict = decomposed.model_dump() if hasattr(decomposed, "dict") else dict(decomposed)
         
         logger.info(f"Query Decomposed -> Domain: {decomposed_dict.get('domain')} | Statutory Focus: {decomposed_dict.get('statutory_focus')}")
         

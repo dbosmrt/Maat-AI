@@ -34,7 +34,7 @@ def qualifier_node(state: AgentState) -> dict:
         })
         
         # Pydantic object
-        classification_dict = classification.dict() if hasattr(classification, "dict") else dict(classification)
+        classification_dict = classification.model_dump() if hasattr(classification, "dict") else dict(classification)
         
         logger.info(
             f"Query Qualified -> Domain: {classification_dict.get('law_domain')} | "
