@@ -58,11 +58,9 @@ NEVER bypass Pylint rules. Avoid writing code that requires disabling Pylint war
 
 This file contains top-level architectural rules. For specific subsystem contexts, check the following locations before modifying code:
 
-Frontend specific rules: Check frontend/README.md (if it exists).
+Frontend specific rules: Check app/README.md (if it exists).
 
-Backend specific rules: Check backend/README.md (if it exists).
-
-Template Schema: Always read the placeholder variables in templates/*.html before modifying the JSON extraction prompt in llm_service.py.
+State Schema: Always read `server/agent/state.py` to understand the `AgentState` TypedDict before adding new fields to graph state.
 
 ## 5. INTENT-BASED VERIFICATION ROUTINE
 
@@ -80,20 +78,18 @@ State Check: If modifying React state, verify it does not cause an infinite rend
 
 Frontend: React, TypeScript, HTML/CSS (Vite) -> cd app && npm run dev
 
-Backend: FastAPI (Python 3.11+) -> cd server && uvicorn main:app --reload
+Backend: FastAPI (Python 3.11+) -> cd server && uvicorn api.main:app --reload
 
 AI/DB Stack: Nvidia Nim API (OpenAI-compatible), LangChain, LangGraph, ChromaDB
 
-PDF Gen: reportlab or pdfkit
-
-Linting: Pylint -> cd server && pylint main.py llm_service.py rag_engine.py
+Linting: Pylint -> cd server && pylint api/ agent/
 
 ## 7. DIRECTORY STRUCTURE
 /
 ├── app/                        # React Frontend (Vite)
 │   ├── src/
 │   │   ├── api.ts              # Fetch wrappers for FastAPI endpoints
-│   │   ├── components/         # ChatUI, HistorySidebar, ScenarioInput
+│   │   ├── components/         # ChatArea, ChatInput, Sidebar, SplashScreen
 │   │   └── App.tsx             # Main Layout
 ├── server/                     # Backend Services
 │   ├── api/                    # FastAPI Application
@@ -140,56 +136,13 @@ Linting: Pylint -> cd server && pylint main.py llm_service.py rag_engine.py
 ├── Dockerfile                 # Containerization configuration
 └── .env                       # Environment variables (API keys, configuration)
 
-## 8. IMPLEMENTATION PLAN: ADVANCED RAG & AGENTS
+## 8. CURRENT ARCHITECTURE (LangGraph)
 
-### User / Logic Architecture
-This flow defines how a user's request is orchestrated via LangGraph:
+The chat pipeline is defined by `server/agent/chat_graph.py` (compile with `build_chat_graph()`). The state schema lives in `server/agent/state.py`. Graph nodes live in `server/agent/node/` and include: `query_decomposer`, `qualifier`, `retriever`, `reranker`, `grader`, `rewriter`, `web_search`, `generator`.
 
-```mermaid
-graph TD
-    A[User Query + Chat History] --> B[Intent & Scenario Classifier]
-    
-    B -->|Story/Scenario detected| C[Scenario Issue Extractor]
-    C --> D
-    B -->|Direct Query| D[ChromaDB Retriever]
-    
-    D --> E[Document Grader Node]
-    E -->|Docs Relevant| F[Conditional Router]
-    E -->|Docs Irrelevant| G[Query Rewriter Node]
-    G --> D
-    
-    F -->|Case Law explicitly requested| H[Case Law Research Agent]
-    F -->|Standard Legal Query| I[Generator Node]
-    
-    H --> I
-    I --> J[Final Output & History Update]
-```
+For the canonical pipeline diagram and node-by-node responsibility matrix, see `README.md §System Architecture`.
 
-### Component Details
-1. **Chat History Strategy (`server/agent/history.py`)**
-   - **Session Management:** `session_id` allows switching histories.
-   - **Sliding Context Window:** Maintain last 3-4 raw conversational turns.
-   - **Dynamic Summarization:** Background LLM summarizes older messages into `memory_summary` to preserve context without exceeding token limits.
-
-2. **State Definition (`server/agent/state.py`)**
-   - Includes `session_id`, `chat_history`, `memory_summary`, `query`, `is_scenario`, `requires_case_law`, `documents`, `case_laws`.
-
-3. **Scenario-Based Legal Advice**
-   - **Scenario Analyzer (Pre-Retrieval):** Extracts core legal concepts (e.g., "coercion") from a hypothetical story before querying ChromaDB.
-   - **Scenario Synthesizer (Post-Retrieval):** Maps retrieved legal principles to the specific hypothetical facts.
-
-4. **Self-Corrective RAG (`server/agent/node/`)**
-   - **Document Grader:** LLM evaluates if retrieved docs address the query.
-   - **Query Rewriter:** Rewrites query for better vector matching if docs are irrelevant.
-   - **Generator:** Strict adherence to context. Outputs fallback if insufficient info.
-
-5. **Conditional Case Law Research Agent (`server/agent/node/researcher.py`)**
-   - Triggered conditionally via `Intent Classifier` if case law is explicitly requested.
-   - Pulls historical context and presents case name, ruling, alongside statutory response.
-
-### API Communication (REST)
-- **`POST /api/chat`**
-  - Req: `{ "session_id": "123", "message": "My query" }`
-  - Res: `{ "reply": "...", "case_laws": [...], "status": "success" }`
-- **`GET /api/history/{session_id}`**
-- **`GET /api/sessions`**
+### Component Notes
+1. **State Definition (`server/agent/state.py`)** — `AgentState` TypedDict with fields including `session_id`, `chat_history`, `memory_summary`, `query`, `is_scenario`, `requires_case_law`, `documents`, `case_laws`, `generation`, `iteration_count`, plus `ingest_*` fields for the ingestion graph.
+2. **Self-Corrective RAG (`server/agent/node/`)** — `grader` evaluates retrieved docs; if `retry_retrieval` is set, request loops through `rewriter` → `retriever`. `generator` enforces strict context adherence.
+3. **Chat Session Persistence** — Sessions are persisted as JSON files at `data/chats/{session_id}.json` by `server/api/routes.py`. No separate `history.py` module exists.
