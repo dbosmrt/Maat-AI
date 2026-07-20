@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "pinecone-assistant": {
+      "source": "pinecone-io/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pinecone-assistant/SKILL.md",
+      "computedHash": "d94823287e521201fbcadd398d32cecea6224580b6947b13b823aa8c325491b1"
+    },
+    "pinecone-cli": {
+      "source": "pinecone-io/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pinecone-cli/SKILL.md",
+      "computedHash": "ad043ad50b0cbd4793db1422b5468e129147ec4c4efa4f720936d45588e326ce"
+    },
+    "pinecone-docs": {
+      "source": "pinecone-io/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pinecone-docs/SKILL.md",
+      "computedHash": "33e47331c3e66a11dc349cec9f59d91173ad3ae0955383434440e61345aab292"
+    },
+    "pinecone-full-text-search": {
+      "source": "pinecone-io/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pinecone-full-text-search/SKILL.md",
+      "computedHash": "f8088a53b5204bc4fe90d6b6d037019460caa809f1549b89fc3a83834be38ee5"
+    },
+    "pinecone-help": {
+      "source": "pinecone-io/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pinecone-help/SKILL.md",
+      "computedHash": "013f25d6dc902cfb4ae348fd77944d734568cdced50cc1f8928ad0c46e84b54e"
+    },
+    "pinecone-mcp": {
+      "source": "pinecone-io/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pinecone-mcp/SKILL.md",
+      "computedHash": "56966a37996e9b3f7c787a911c4a104ed4558f4c5c6063ebf532911029cc757b"
+    },
+    "pinecone-n8n": {
+      "source": "pinecone-io/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pinecone-n8n/SKILL.md",
+      "computedHash": "87a3d988a10bbc46e0a9f350474b68eb3bf860a543515b435b4df028ceb51674"
+    },
+    "pinecone-query": {
+      "source": "pinecone-io/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pinecone-query/SKILL.md",
+      "computedHash": "6e7ec01fd10edd853db86dd078742f89e7471493fac1ef55b2f699aa138bc6bf"
+    },
+    "pinecone-quickstart": {
+      "source": "pinecone-io/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pinecone-quickstart/SKILL.md",
+      "computedHash": "937d1eee209358c021b7b61ae9befe657855c6d40fe69f5210eccd8d12e448ec"
+    }
+  }
+}

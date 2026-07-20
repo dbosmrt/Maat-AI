@@ -1,66 +1,112 @@
+"""Vector database utilities for the Legal RAG Chatbot."""
+
 import os
-from langchain_chroma import Chroma
-# Pinecone import lazy-loaded to avoid hard dependency if not used
+from typing import Optional
+
+from pinecone import Pinecone, ServerlessSpec
+from langchain_pinecone import PineconeVectorStore
+from langchain_core.embeddings import Embeddings
+
 from agent.model import EmbeddingModels
 
-# Define default vector store directory relative to this script
-VECTOR_STORE_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../../../vector_store")
-)
+# Defaults are aligned with `nvidia/nv-embedqa-e5-v5` (NVIDIA Nemotron Embed)
+# which emits 1024-dim cosine-friendly normalized vectors.
+_DEFAULT_INDEX = "legal-rag"
+_DEFAULT_CLOUD = "aws"
+_DEFAULT_REGION = "us-east-1"
+_DEFAULT_DIM = 1024
+_DEFAULT_METRIC = "cosine"
+
+
+def _resolve_api_key() -> str:
+    """Return the Pinecone API key from env, supporting legacy var name."""
+    api_key = os.environ.get("PINECONE_API_KEY", "").strip()
+    if not api_key:
+        api_key = os.environ.get("PINECONE_KEY", "").strip()
+    if not api_key:
+        raise ValueError(
+            "PINECONE_API_KEY is not set. Add it to .env or export it before "
+            "starting the server."
+        )
+    return api_key
+
+
+def _resolve_index_name() -> str:
+    """Return the configured Pinecone index name with empty-string fallback."""
+    return os.environ.get("PINECONE_INDEX", _DEFAULT_INDEX).strip() or _DEFAULT_INDEX
+
+
+def _ensure_pinecone_index(pc: Pinecone, name: str) -> None:
+    """Create the index if it does not exist. Safe to call at startup."""
+    try:
+        if pc.has_index(name):
+            return
+        pc.create_index(
+            name=name,
+            dimension=int(os.environ.get("PINECONE_DIM", _DEFAULT_DIM)),
+            metric=os.environ.get("PINECONE_METRIC", _DEFAULT_METRIC),
+            spec=ServerlessSpec(
+                cloud=os.environ.get("PINECONE_CLOUD", _DEFAULT_CLOUD),
+                region=os.environ.get("PINECONE_REGION", _DEFAULT_REGION),
+            ),
+        )
+    except Exception as exc:
+        # If the index was created concurrently or already exists, swallow.
+        if "ALREADY_EXISTS" in str(exc) or "already exists" in str(exc).lower():
+            return
+        raise
 
 
 class VectorDatabases:
+    """Single-source vector-store facade backed by Pinecone."""
+
     @staticmethod
-    def get_vector_store(embeddings=None) -> Chroma:
+    def get_pinecone_client() -> Pinecone:
+        """Return the underlying Pinecone (DB) client."""
+        return Pinecone(api_key=_resolve_api_key())
+
+    @staticmethod
+    def get_pinecone_index_name() -> str:
+        """Return the configured Pinecone index name."""
+        return _resolve_index_name()
+
+    @staticmethod
+    def get_raw_index():
+        """Return the raw `pinecone.Index` handle (low-level API surface)."""
+        pc = VectorDatabases.get_pinecone_client()
+        name = _resolve_index_name()
+        _ensure_pinecone_index(pc, name)
+        return pc.Index(name)
+
+    @staticmethod
+    def get_vector_store(embeddings: Optional[Embeddings] = None) -> PineconeVectorStore:
         """
-        Initializes and returns the Chroma vector store connection.
-        Optionally accepts a pre-built embeddings instance (e.g. from fallback logic).
+        Initialize and return the Pinecone vector store.
+
+        Optionally accepts a pre-built embeddings instance (used by the
+        fallback model path in `retriever_node`).
         """
         if embeddings is None:
             embeddings = EmbeddingModels.get_nemotron_embed()
 
-        # Ensure vector store directory exists
-        os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
+        pc = VectorDatabases.get_pinecone_client()
+        name = _resolve_index_name()
+        _ensure_pinecone_index(pc, name)
 
-        vectorstore = Chroma(
-            collection_name="legal_rag",
-            embedding_function=embeddings,
-            persist_directory=VECTOR_STORE_DIR,
-        )
-        return vectorstore
-
-    @staticmethod
-    def get_pinecone_db(embeddings=None):
-        """
-        Initializes and returns the Pinecone vector store connection.
-        Optionally accepts a pre-built embeddings instance (e.g. from fallback logic).
-        """
-        # Lazy import pinecone only when needed
-        try:
-            from langchain_pinecone import PineconeVectorStore
-        except ImportError as e:
-            raise ImportError(
-                "Pinecone dependencies not installed. Install pinecone-client and langchain-pinecone to use Pinecone."
-            ) from e
-
-        if embeddings is None:
-            embeddings = EmbeddingModels.get_nemotron_embed()
-
-        api_key = os.environ.get("PINECONE_KEY")
-        if not api_key:
-            raise ValueError("PINECONE_KEY environment variable is not set")
-
-        vectorstore = PineconeVectorStore(
-            index_name="legal_rag",
+        return PineconeVectorStore(
+            index_name=name,
             embedding=embeddings,
-            pinecone_api_key=api_key,
+            pinecone_api_key=_resolve_api_key(),
         )
-        return vectorstore
 
 
-# Module-level convenience functions (for backward compatibility)
-def get_vector_store(embeddings=None):
+# Module-level convenience functions (kept for backward compatibility with
+# any external callers that may still import the old names).
+def get_vector_store(embeddings: Optional[Embeddings] = None) -> PineconeVectorStore:
+    """Backward-compatible alias for `VectorDatabases.get_vector_store`."""
     return VectorDatabases.get_vector_store(embeddings)
 
-def get_pinecone_db(embeddings=None):
-    return VectorDatabases.get_pinecone_db(embeddings)
+
+def get_pinecone_db(embeddings: Optional[Embeddings] = None) -> PineconeVectorStore:
+    """Backward-compatible alias for `VectorDatabases.get_vector_store`."""
+    return VectorDatabases.get_vector_store(embeddings)

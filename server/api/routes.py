@@ -22,7 +22,7 @@ chat_graph = build_chat_graph()
 CHAT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "chats"))
 os.makedirs(CHAT_DIR, exist_ok=True)
 
-def _load_session_file(session_id: str) -> dict:
+def _load_session_file(session_id: str) -> dict | None:
     filepath = os.path.join(CHAT_DIR, f"{session_id}.json")
     if not os.path.exists(filepath):
         return None
@@ -93,7 +93,7 @@ def get_chat_history(session_id: str, api_key: str = Depends(get_api_key)):
     data = _load_session_file(session_id)
     if not data:
         raise HTTPException(status_code=404, detail="Session not found")
-        
+
     return ChatHistoryResponse(
         session_id=session_id,
         history=data.get("history", [])
@@ -103,35 +103,40 @@ def get_chat_history(session_id: str, api_key: str = Depends(get_api_key)):
 def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(get_api_key)):
     """Core RAG inference endpoint. Use 'new' as the session_id to automatically generate a new chat session."""
     start_time = time.perf_counter()
-    
+
     if session_id.lower() == "new":
         session_id = str(uuid.uuid4())[:8]
         # Initialize an empty session file
         _save_session_file(session_id, "", [])
-        data = {"session_id": session_id, "memory_summary": "", "history": []}
+        data: dict | None = {"session_id": session_id, "memory_summary": "", "history": []}
         logger.info(f"Auto-created new session: {session_id}")
     else:
         data = _load_session_file(session_id)
         if not data:
             logger.warning(f"Chat invoked on non-existent session: {session_id}")
             raise HTTPException(status_code=404, detail="Session not found. Provide a valid session ID or use 'new'.")
-            
+
+    if data is None:
+        raise HTTPException(status_code=500, detail="Failed to load session data")
+
     logger.info(f"Chat invoked on session {session_id}: '{request.query[:80]}...'")
-    
-    memory_summary = data.get("memory_summary", "")
-    raw_history = data.get("history", [])
-    
+
+    memory_summary = str(data.get("memory_summary", ""))
+    raw_history_any = data.get("history", [])
+    raw_history: List[dict] = raw_history_any if isinstance(raw_history_any, list) else []
+
     # Rebuild LangChain message objects
-    lc_history = []
+    from typing import Any
+    lc_history: List[Any] = []
     for msg in raw_history:
         if msg["type"] == "human":
             lc_history.append(HumanMessage(content=msg["content"]))
         elif msg["type"] == "ai":
             lc_history.append(AIMessage(content=msg["content"]))
-            
+
     # Append the new user query
     lc_history.append(HumanMessage(content=request.query))
-    
+
     # Construct AgentState
     state = AgentState(
         query=request.query,
@@ -146,7 +151,7 @@ def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(ge
         generation="",
         iteration_count=0
     )
-    
+
     # Invoke Graph
     try:
         result = chat_graph.invoke(state)
@@ -154,20 +159,20 @@ def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(ge
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         logger.error(f"Pipeline failed after {elapsed_ms:.0f}ms for session {session_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Pipeline error: {str(e)}")
-        
+
     generation = result.get("generation", "Failed to generate response.")
     domain = result.get("law_domain", "General")
-    
+
     # Save the new history
     raw_history.append({"type": "human", "content": request.query})
     raw_history.append({"type": "ai", "content": generation})
-    
+
     # In a real system, the memory summary would be updated here.
     _save_session_file(session_id, memory_summary, raw_history)
-    
+
     elapsed_ms = (time.perf_counter() - start_time) * 1000
     logger.info(f"Chat completed for session {session_id} in {elapsed_ms:.0f}ms | domain={domain}")
-    
+
     return ChatResponse(
         session_id=session_id,
         generation=generation,

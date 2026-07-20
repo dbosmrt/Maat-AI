@@ -1,6 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 
-GENERATOR_SYSTEM_PROMPT = """You are 'Ma-at', an elite Indian Legal AI Assistant. 
+GENERATOR_SYSTEM_PROMPT = """You are 'Ma-at', an elite Indian Legal AI Assistant.
 Your goal is to answer the user's legal query accurately, comprehensively, and professionally.
 
 CRITICAL RULES:

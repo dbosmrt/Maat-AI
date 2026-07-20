@@ -15,13 +15,12 @@ def get_api_key(api_key: str = Security(api_key_scheme)) -> str:
     If MAAT_API_KEY is not set in the environment, it defaults to a secure dummy key for local testing.
     """
     expected_api_key = os.getenv("MAAT_API_KEY", "maat-local-dev-key-777")
-    
+
     if api_key == expected_api_key:
         return api_key
-    else:
-        logger.warning(f"Authentication failed: invalid API key from request")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Could not validate API credentials. Received: {api_key}"
-        )
 
+    logger.warning("Authentication failed: invalid API key from request")
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"Could not validate API credentials. Received: {api_key}"
+    )

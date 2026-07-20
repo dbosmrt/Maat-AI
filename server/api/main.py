@@ -57,7 +57,7 @@ if static_dir.exists():
     assets_dir = static_dir / "assets"
     if assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
-    
+
     # Catch-all route to serve the SPA
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
@@ -72,4 +72,3 @@ if __name__ == "__main__":
     import uvicorn
     # When run directly
     uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
-

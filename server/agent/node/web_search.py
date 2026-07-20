@@ -21,16 +21,16 @@ def _summarize_query(query: str) -> list[str]:
         llm = ChatModels.get_sarvam_m()
         structured_llm = llm.with_structured_output(SearchQueries)
         prompt = get_search_query_prompt()
-        
+
         chain = prompt | structured_llm
         result = chain.invoke({
             "query": query,
             "format_instructions": "Format: STRICT JSON MATCH. DO NOT USE MARKDOWN."
         })
-        
+
         result_dict = result.dict() if hasattr(result, "dict") else dict(result)
         queries = result_dict.get("search_queries", [])
-        
+
         if queries:
             logger.info(f"Search Summarizer generated {len(queries)} queries: {queries}")
             log_node_event("web_search_summarizer", "SUCCESS")
@@ -39,22 +39,22 @@ def _summarize_query(query: str) -> list[str]:
         logger.warning(f"Search query summarizer failed: {e}. Using truncated query.")
         log_system_error(traceback.format_exc())
         log_node_event("web_search_summarizer", "PARSING_RETRY", error_payload=str(e))
-    
+
     # Fallback: just truncate the raw query
     return [query[:QUERY_SUMMARIZE_THRESHOLD]]
 
 
 def web_search_node(state: AgentState) -> dict:
     """
-    Executes a web search for the query, particularly targeted at finding 
+    Executes a web search for the query, particularly targeted at finding
     Indian case laws, judicial precedents, and legal articles.
     For long queries, uses an LLM agent to first extract concise search terms.
     """
     query = state.get("query", "")
-    
+
     if not query:
         return {"case_laws": []}
-    
+
     # Decide whether to summarize the query or use it directly
     if len(query) > QUERY_SUMMARIZE_THRESHOLD:
         logger.info(f"Query is {len(query)} chars, invoking search summarizer agent...")
@@ -63,34 +63,34 @@ def web_search_node(state: AgentState) -> dict:
         # Short query: enhance it directly
         suffix = "India Supreme Court High Court judgments case law" if state.get("requires_case_law", False) else "Indian law"
         search_queries = [f"{query} {suffix}"]
-    
+
     logger.info(f"Web Search Node: Executing {len(search_queries)} searches...")
-    
+
     try:
         all_results = []
         seen_links = set()
-        
+
         with DDGS() as ddgs:
             for sq in search_queries:
                 logger.info(f"  Searching: '{sq}'")
                 ddg_results = ddgs.text(sq, region='in-en', max_results=3)
-                
+
                 for r in ddg_results:
                     link = r.get("href", "")
                     # Deduplicate by URL
                     if link in seen_links:
                         continue
                     seen_links.add(link)
-                    
+
                     title = r.get("title", "")
                     body = r.get("body", "")
                     formatted_result = f"[External Source: {title}] ({link})\n{body}\n"
                     all_results.append(formatted_result)
-                    
+
         logger.info(f"Web Search Node: Found {len(all_results)} unique external results.")
-        
+
         log_node_event("web_search_node", "SUCCESS")
-        
+
         return {
             "case_laws": all_results
         }

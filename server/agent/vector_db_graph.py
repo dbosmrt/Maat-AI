@@ -1,31 +1,39 @@
-from agent.utils.logger import get_logger
-from langgraph.graph import StateGraph, START, END
-from agent.state import AgentState 
+"""Vector DB pipeline construction for the Legal RAG Chatbot.
 
-from agent.node.ingestion import ingestion_node
-from agent.node.cleaning import cleaning_node
+Builds a StateGraph that converts documents into a Pinecone vector store.
+
+Workflow:
+    ingestion -> cleaning -> chunking -> embedding -> END
+"""
+
+from langgraph.graph import END, START, StateGraph
+
 from agent.node.chunking import chunking_node
+from agent.node.cleaning import cleaning_node
 from agent.node.embedding import embedding_node
+from agent.node.ingestion import ingestion_node
+from agent.state import AgentState
+from agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-
 def build_db_pipeline():
     """
-    Builds a Pipeline to convert given document into vector store.
-    Workflow : ingestion -> cleaning -> chunking -> embedding -> END.
-    """
+    Construct and compile the ingestion StateGraph.
 
+    Returns:
+        A compiled `CompiledStateGraph` ready to be invoked with an AgentState.
+    """
     workflow = StateGraph(AgentState)
 
-    # Add each node into the graph 
+    # Add each node into the graph
     workflow.add_node("ingestion_node", ingestion_node)
     workflow.add_node("cleaning_node", cleaning_node)
     workflow.add_node("chunking_node", chunking_node)
     workflow.add_node("embedding_node", embedding_node)
 
-    # now build the graph by connecting the nodes.
+    # Build the graph by connecting the nodes in order.
     workflow.add_edge(START, "ingestion_node")
     workflow.add_edge("ingestion_node", "cleaning_node")
     workflow.add_edge("cleaning_node", "chunking_node")
@@ -34,4 +42,3 @@ def build_db_pipeline():
 
     logger.info("Compiling the Vector DB pipeline Graph")
     return workflow.compile()
-

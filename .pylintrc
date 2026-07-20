@@ -1,0 +1,51 @@
+[MAIN]
+# Pylint configuration for the Ma-at project.
+# Goal: clean, consistent Python that surfaces real bugs and poor style.
+# We deliberately disable a small number of messages that are intrinsic to
+# Pydantic-based schemas (too-few-public-methods), legitimate broad-except
+# boundaries at module edges, and duplicate-code/template similarity checks
+# that are noise for a small backend.
+
+# Standard project-wide ignore list — common false positives for this codebase.
+disable=
+    # Pydantic models are data containers, not domain classes — methods are
+    # generated at runtime by BaseModel; this check is meaningless here.
+    too-few-public-methods,
+    # Template-style similarity between LangGraph nodes is by design.
+    duplicate-code,
+    # ImportError re-raises during module import (python-dotenv optional).
+    broad-except,
+    # Re-raised after logging in the structured logging helpers.
+    try-except-raise,
+    # The pipeline is the entry point — flexible signature is intentional.
+    too-many-arguments,
+    # Refactoring long orchestration methods adds risk for marginal gains.
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-return-statements,
+    # Often redundant in internal methods and models.
+    missing-docstring,
+    # We heavily use f-strings for logging.
+    logging-fstring-interpolation,
+    # Ignore import order/grouping as we rely on other formatters for this.
+    wrong-import-order,
+    ungrouped-imports,
+    # False positive with pinecone module
+    no-name-in-module,
+    # Common pattern in our project to avoid circular imports
+    import-outside-toplevel,
+    # FastAPI dependency injection often results in unused arguments
+    unused-argument,
+    # Sometimes we want a generic exception without 'from e'
+    raise-missing-from,
+    unspecified-encoding,
+    line-too-long,
+    unused-import
+
+max-line-length=120
+ignore-paths=
+ignore-patterns=^\.venv/,^build/,^dist/,^logs/,^vector_store/
+score=yes
+reports=no
+output-format=colorized

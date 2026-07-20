@@ -277,9 +277,9 @@ def _configure_server_logger(logger: logging.Logger):
 def log_node_event(
     node_name: str,
     status: str,
-    tokens_used: int = None,
-    duration_ms: float = None,
-    error_payload: str = None,
+    tokens_used: int | None = None,
+    duration_ms: float | None = None,
+    error_payload: str | None = None,
 ):
     """
     Logs structured operational telemetry for a pipeline node execution.
@@ -297,7 +297,8 @@ def log_node_event(
     _ensure_log_dir()
     env = os.getenv("ENVIRONMENT", "dev").lower()
 
-    event = {
+    from typing import Any
+    event: dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "node_id": node_name,
         "status": status,

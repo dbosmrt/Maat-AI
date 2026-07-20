@@ -14,19 +14,19 @@ def rewriter_node(state: AgentState) -> dict:
     """
     query = state.get("query", "")
     iteration_count = state.get("iteration_count", 0)
-    
+
     logger.info(f"Rewriting query for better retrieval (Iteration {iteration_count + 1}). Original: {query}")
-    
+
     llm = ChatModels.get_sarvam_m()
     # Pass iteration count to get the appropriate prompt strategy
     prompt = get_rewriter_prompt(iteration_count)
     chain = prompt | llm | StrOutputParser()
-    
+
     try:
         new_query = chain.invoke({"query": query}).strip(' "\'')
         logger.info(f"Rewritten Query: {new_query}")
         log_node_event("rewriter_node", "SUCCESS")
-        
+
         return {
             "query": new_query,
             "iteration_count": iteration_count + 1

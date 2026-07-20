@@ -1,6 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 
-RERANKER_SYSTEM_PROMPT = """You are an expert legal AI Re-ranker. 
+RERANKER_SYSTEM_PROMPT = """You are an expert legal AI Re-ranker.
 Your job is to read a list of retrieved legal documents and identify WHICH documents are actually relevant to answering the user's query.
 
 CRITICAL RULES:
