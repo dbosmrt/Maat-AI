@@ -19,12 +19,13 @@ def test_grader_node_relevant():
     assert result.get("search_required") is False
 
 def test_grader_node_irrelevant():
-    """Test Grader with irrelevant documents. Should route to web search."""
+    """Test Grader with irrelevant documents. Should route to web search after retries exhausted."""
     state = AgentState(
         query="What is the punishment for theft?",
         documents=["[Source: BNS] A person who commits murder shall be punished with death."],
         requires_case_law=False,
-        session_id="test", chat_history=[], memory_summary="", case_laws=[], generation="", iteration_count=0
+        session_id="test", chat_history=[], memory_summary="", case_laws=[], generation="",
+        iteration_count=3  # Exhaust retries (max 2) to force web search
     )
     result = grader_node(state)
     assert result.get("search_required") is True
