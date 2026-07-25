@@ -1,15 +1,16 @@
 """Document Ingestion Node for Legal RAG Chatbot.
 
 This module orchestrates the PDF ingestion process by utilizing functions
-from `ingestion_utils.py`.
+from `ingestion_utils.py` and also supports direct markdown file ingestion.
 """
 
 from pathlib import Path
 
 from agent.state import AgentState
 from agent.utils.ingestion_utils import (
-    parse_pdf_with_docling,
-    parse_pdf_with_unstructured,
+    ingest_documents_to_pinecone,
+    process_markdown_files,
+    process_pdf_with_fallback,
     validate_paths,
 )
 from agent.utils.logger import get_logger
@@ -17,47 +18,42 @@ from agent.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def process_pdf_with_fallback(pdf_path: str, output_dir: str) -> bool:
-    """
-    Try Docling if GPU is available, otherwise fall back to Unstructured.
-
-    Args:
-        pdf_path: Absolute path to the source PDF file.
-        output_dir: Directory in which the Markdown output will be saved.
-
-    Returns:
-        True on successful conversion; False if both parsers fail.
-    """
-    gpu_available = False
-    try:
-        import torch
-        gpu_available = torch.cuda.is_available()
-    except ImportError:
-        pass
-
-    if gpu_available:
-        logger.info("GPU detected. Trying high-accuracy Docling parser.")
-        if parse_pdf_with_docling(pdf_path, output_dir):
-            return True
-
-    logger.info("GPU not detected or Docling failed. Falling back to CPU parsing.")
-    return parse_pdf_with_unstructured(pdf_path, output_dir)
-
-
 def ingestion_node(state: AgentState) -> dict:
     """
-    LangGraph node to handle PDF ingestion.
+    LangGraph node to handle document ingestion (PDF to Markdown or Markdown to Pinecone).
 
-    Reads input/output directories from the state and converts every PDF
-    in the input directory to Markdown in the output directory.
+    Supports two modes:
+    1. PDF Ingestion: Converts PDFs in `ingest_input_dir` to Markdown in `ingest_output_dir`
+    2. Markdown Ingestion: Loads .md files from `ingest_markdown_dir`, chunks them,
+       and embeds them directly into Pinecone
 
     Args:
-        state: Current LangGraph state. Must contain `ingest_input_dir`
-            and `ingest_output_dir`.
+        state: Current LangGraph state. For PDF mode: must contain `ingest_input_dir`
+            and `ingest_output_dir`. For Markdown mode: must contain `ingest_markdown_dir`.
 
     Returns:
         A dict with the new `ingest_status` describing the outcome.
     """
+    # Check for Markdown ingestion mode
+    markdown_dir = state.get("ingest_markdown_dir", "")
+    if markdown_dir:
+        logger.info("Markdown ingestion mode detected. Input: %s", markdown_dir)
+        documents = process_markdown_files(markdown_dir)
+
+        if not documents:
+            return {"ingest_status": "Failed: No markdown files found or processed"}
+
+        success = ingest_documents_to_pinecone(documents)
+
+        if success:
+            status = f"Completed: Successfully ingested {len(documents)} chunks into Pinecone."
+        else:
+            status = "Failed: Error during Pinecone ingestion."
+
+        logger.info(status)
+        return {"ingest_status": status, "documents": []}
+
+    # Original PDF to Markdown mode
     input_dir = state.get("ingest_input_dir", "")
     output_dir = state.get("ingest_output_dir", "")
 
@@ -69,7 +65,7 @@ def ingestion_node(state: AgentState) -> dict:
         return {"ingest_status": "Failed: Missing directories in state"}
 
     logger.info(
-        "ingestion_node started. Input: %s, Output: %s", input_dir, output_dir
+        "ingestion_node started (PDF mode). Input: %s, Output: %s", input_dir, output_dir
     )
 
     if not validate_paths(input_dir, output_dir):

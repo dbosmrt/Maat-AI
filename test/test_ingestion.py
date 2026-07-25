@@ -11,10 +11,8 @@ import pytest
 # Ensure server module can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../server')))
 
-from agent.node.ingestion import (
-    process_pdf_with_fallback,
-    ingestion_node
-)
+from agent.node.ingestion import ingestion_node
+from agent.utils.ingestion_utils import process_pdf_with_fallback
 
 @pytest.fixture
 def mock_state():
@@ -42,8 +40,8 @@ def mock_torch_cpu(monkeypatch):
     monkeypatch.setitem(sys.modules, 'torch', MockTorch())
 
 
-@patch('agent.node.ingestion.parse_pdf_with_docling')
-@patch('agent.node.ingestion.parse_pdf_with_unstructured')
+@patch('agent.utils.ingestion_utils.parse_pdf_with_docling')
+@patch('agent.utils.ingestion_utils.parse_pdf_with_unstructured')
 def test_process_pdf_with_fallback_docling_success(mock_unstructured, mock_docling, mock_torch_gpu):
     """Test that docling success skips fallbacks when GPU is available."""
     mock_docling.return_value = True
@@ -56,8 +54,8 @@ def test_process_pdf_with_fallback_docling_success(mock_unstructured, mock_docli
     mock_unstructured.assert_not_called()
 
 
-@patch('agent.node.ingestion.parse_pdf_with_docling')
-@patch('agent.node.ingestion.parse_pdf_with_unstructured')
+@patch('agent.utils.ingestion_utils.parse_pdf_with_docling')
+@patch('agent.utils.ingestion_utils.parse_pdf_with_unstructured')
 def test_process_pdf_with_fallback_unstructured_success(mock_unstructured, mock_docling, mock_torch_cpu):
     """Test that unstructured is used if GPU is not available."""
     mock_unstructured.return_value = True
@@ -69,8 +67,8 @@ def test_process_pdf_with_fallback_unstructured_success(mock_unstructured, mock_
     mock_unstructured.assert_called_once_with("/fake/test.pdf", "/fake/out")
 
 
-@patch('agent.node.ingestion.parse_pdf_with_docling')
-@patch('agent.node.ingestion.parse_pdf_with_unstructured')
+@patch('agent.utils.ingestion_utils.parse_pdf_with_docling')
+@patch('agent.utils.ingestion_utils.parse_pdf_with_unstructured')
 def test_process_pdf_with_fallback_docling_fails(mock_unstructured, mock_docling, mock_torch_gpu):
     """Test fallback to unstructured when Docling fails (returns False)."""
     mock_docling.return_value = False

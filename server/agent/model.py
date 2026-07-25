@@ -41,7 +41,7 @@ class ChatModels:
             api_key=_get_nvidia_api_key(),
             temperature=0.6,
             top_p=0.95,
-            max_tokens=100000,
+            max_tokens=8192,
         )
 
     @staticmethod
@@ -52,7 +52,7 @@ class ChatModels:
             api_key=_get_nvidia_api_key(),
             temperature=0.6,
             top_p=0.95,
-            max_tokens=100000,
+            max_tokens=8192,
             seed=42,
         )
 
@@ -64,7 +64,7 @@ class ChatModels:
             api_key=_get_nvidia_api_key(),
             temperature=0.6,
             top_p=0.95,
-            max_tokens=100000,
+            max_tokens=8192,
         )
 
     @staticmethod
@@ -75,7 +75,7 @@ class ChatModels:
             api_key=_get_nvidia_api_key(),
             temperature=0.6,
             top_p=0.95,
-            max_tokens=100000,
+            max_tokens=8192,
         )
 
 

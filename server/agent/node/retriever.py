@@ -25,7 +25,7 @@ from agent.utils.embedding_utils import VectorDatabases
 logger = get_logger(__name__)
 
 # Module-level BM25 cache. Rebuilt lazily on first retrieval after invalidation.
-_bm25_cache: Dict[str, BM25Retriever | None] = {"instance": None}
+_bm25_cache: Dict[str, BM25Retriever | _EmptyBM25Retriever | None] = {"instance": None}
 
 _BM25_TOP_K = 20
 _DENSE_TOP_K = 20
@@ -90,7 +90,17 @@ def _fetch_all_chunks_from_pinecone() -> List[Document]:
     return docs
 
 
-def _get_bm25_retriever() -> BM25Retriever:
+class _EmptyBM25Retriever:
+    """Dummy BM25 retriever that always returns empty results when Pinecone is empty."""
+
+    def __init__(self):
+        self.k = _BM25_TOP_K
+
+    def invoke(self, query: str) -> list:
+        return []
+
+
+def _get_bm25_retriever() -> BM25Retriever | _EmptyBM25Retriever:
     """Return the cached BM25 retriever, building it from Pinecone on demand."""
     cached = _bm25_cache["instance"]
     if cached is None:
@@ -98,7 +108,11 @@ def _get_bm25_retriever() -> BM25Retriever:
         lc_docs = _fetch_all_chunks_from_pinecone()
         if not lc_docs:
             logger.warning("Pinecone index is empty — BM25 will return no hits.")
-            lc_docs = [Document(page_content="", metadata={})]
+            # Return a dummy retriever that yields empty results instead of
+            # creating a BM25 with an empty document (which causes divide-by-zero)
+            empty_retriever = _EmptyBM25Retriever()
+            _bm25_cache["instance"] = empty_retriever
+            return empty_retriever
         retriever: BM25Retriever = BM25Retriever.from_documents(lc_docs)
         retriever.k = _BM25_TOP_K
         _bm25_cache["instance"] = retriever
