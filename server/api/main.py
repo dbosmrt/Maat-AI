@@ -1,4 +1,5 @@
-import uuid
+import os
+from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -7,7 +8,6 @@ from api.routes import router
 from agent.utils.logger import get_logger, set_correlation_id
 
 # Ensure .env is loaded
-from pathlib import Path
 try:
     from dotenv import load_dotenv
     env_path = Path(__file__).parent.parent.parent / ".env"
@@ -17,19 +17,23 @@ except ImportError:
 
 logger = get_logger(__name__)
 
+# CORS configuration - use environment variable for production, fallback to localhost for dev
+cors_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000")
+allow_origins = [origin.strip() for origin in cors_origins.split(",")]
+
 app = FastAPI(
     title="Ma-at Legal AI API",
     description="Backend RAG API for the Indian Legal Code AI Assistant.",
     version="1.0.0"
 )
 
-# CORS Middleware for local frontend testing
+# CORS Middleware - restricted origins from env var
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Change this in production to specific domains
+    allow_origins=allow_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Correlation-ID"],
 )
 
 
