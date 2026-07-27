@@ -8,11 +8,16 @@ The dense path uses the NVIDIA Nemotron embedding model through LangChain's
 Pinecone vector store. The BM25 (sparse) path is rebuilt in memory from the
 chunks currently stored in Pinecone and cached for the process lifetime;
 ingestion must call `invalidate_bm25_cache()` after upserts.
+
+BM25 cache is also persisted to disk (pickle) to speed up cold starts.
 """
 
 import os
 import time
 import threading
+import pickle
+import hashlib
+from pathlib import Path
 from typing import Any, Dict, List
 
 from langchain_core.documents import Document
@@ -34,6 +39,12 @@ _DENSE_TOP_K = 20
 _PINECONE_FETCH_TOP_K = 10_000  # serverless cap per query
 _RRF_K = 60
 
+# Cache persistence
+_BM25_CACHE_DIR = Path(__file__).parent.parent.parent / "vector_store" / "bm25_cache"
+_BM25_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+_BM25_CACHE_FILE = _BM25_CACHE_DIR / "bm25_retriever.pkl"
+_BM25_VERSION_FILE = _BM25_CACHE_DIR / "pinecone_version.txt"
+
 
 def reciprocal_rank_fusion(
     results_lists: List[List[Document]], k: int = _RRF_K
@@ -53,10 +64,75 @@ def reciprocal_rank_fusion(
     return [item["doc"] for item in sorted_items]
 
 
+def _get_pinecone_version() -> str:
+    """Get a version hash of the Pinecone index contents for cache invalidation."""
+    try:
+        raw_index = VectorDatabases.get_raw_index()
+        stats = raw_index.describe_index_stats()
+        # Create a hash from total vector count and index name
+        index_name = VectorDatabases.get_pinecone_index_name()
+        total_vectors = stats.get("total_vector_count", 0)
+        return hashlib.sha256(f"{index_name}:{total_vectors}".encode()).hexdigest()[:16]
+    except Exception as exc:
+        logger.warning("Could not get Pinecone version for cache: %s", exc)
+        return "unknown"
+
+
+def _load_bm25_from_cache() -> BM25Retriever | _EmptyBM25Retriever | None:
+    """Load BM25 retriever from disk cache if valid."""
+    try:
+        if not _BM25_CACHE_FILE.exists() or not _BM25_VERSION_FILE.exists():
+            return None
+
+        # Check version matches
+        with open(_BM25_VERSION_FILE, "r") as f:
+            cached_version = f.read().strip()
+
+        current_version = _get_pinecone_version()
+        if cached_version != current_version:
+            logger.info("Pinecone index changed (version mismatch), cache invalid.")
+            return None
+
+        with open(_BM25_CACHE_FILE, "rb") as f:
+            retriever = pickle.load(f)
+
+        logger.info("Loaded BM25 retriever from cache (%d docs).", len(retriever.docs))
+        return retriever
+    except (pickle.UnpicklingError, EOFError, AttributeError) as exc:
+        logger.warning("Failed to load BM25 cache: %s", exc)
+        return None
+
+
+def _save_bm25_to_cache(retriever: BM25Retriever) -> None:
+    """Save BM25 retriever to disk cache."""
+    try:
+        # Save the retriever
+        with open(_BM25_CACHE_FILE, "wb") as f:
+            pickle.dump(retriever, f)
+
+        # Save version
+        current_version = _get_pinecone_version()
+        with open(_BM25_VERSION_FILE, "w") as f:
+            f.write(current_version)
+
+        logger.info("Saved BM25 retriever to cache.")
+    except Exception as exc:
+        logger.warning("Failed to save BM25 cache: %s", exc)
+
+
 def invalidate_bm25_cache() -> None:
     """Clear the cached BM25 retriever so it is rebuilt on next query."""
-    _bm25_cache["instance"] = None
-    logger.info("BM25 cache invalidated. Will rebuild on next retrieval.")
+    with _bm25_lock:
+        _bm25_cache["instance"] = None
+    # Also remove disk cache
+    try:
+        if _BM25_CACHE_FILE.exists():
+            _BM25_CACHE_FILE.unlink()
+        if _BM25_VERSION_FILE.exists():
+            _BM25_VERSION_FILE.unlink()
+    except OSError:
+        pass
+    logger.info("BM25 cache invalidated (memory and disk). Will rebuild on next retrieval.")
 
 
 def _fetch_all_chunks_from_pinecone() -> List[Document]:
@@ -126,8 +202,24 @@ class _EmptyBM25Retriever:
 
 def _get_bm25_retriever() -> BM25Retriever | _EmptyBM25Retriever:
     """Return the cached BM25 retriever, building it from Pinecone on demand."""
+    # First check without lock (fast path)
     cached = _bm25_cache["instance"]
-    if cached is None:
+    if cached is not None:
+        return cached
+
+    # Acquire lock for rebuilding
+    with _bm25_lock:
+        # Double-check after acquiring lock
+        cached = _bm25_cache["instance"]
+        if cached is not None:
+            return cached
+
+        # Try to load from disk cache first
+        cached = _load_bm25_from_cache()
+        if cached is not None:
+            _bm25_cache["instance"] = cached
+            return cached
+
         logger.info("Initializing BM25 keyword index from Pinecone (one-time)…")
         lc_docs = _fetch_all_chunks_from_pinecone()
         if not lc_docs:
@@ -140,10 +232,10 @@ def _get_bm25_retriever() -> BM25Retriever | _EmptyBM25Retriever:
         retriever: BM25Retriever = BM25Retriever.from_documents(lc_docs)
         retriever.k = _BM25_TOP_K
         _bm25_cache["instance"] = retriever
+        # Save to disk for future cold starts
+        _save_bm25_to_cache(retriever)
         logger.info("BM25 index initialized (%d chunks).", len(lc_docs))
-    result = _bm25_cache["instance"]
-    assert result is not None
-    return result
+        return retriever
 
 
 def _hybrid_retrieve(hybrid_query: str, vectorstore) -> List[str]:

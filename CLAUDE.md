@@ -80,7 +80,7 @@ Frontend: React, TypeScript, HTML/CSS (Vite) -> cd app && npm run dev
 
 Backend: FastAPI (Python 3.11+) -> cd server && uvicorn api.main:app --reload
 
-AI/DB Stack: Nvidia Nim API (OpenAI-compatible), LangChain, LangGraph, ChromaDB
+AI/DB Stack: Nvidia Nim API (OpenAI-compatible), LangChain, LangGraph, Pinecone
 
 Linting: Pylint -> cd server && pylint api/ agent/
 
@@ -130,7 +130,7 @@ Linting: Pylint -> cd server && pylint api/ agent/
 │           ├── cleaning_utils.py # Text cleaning and normalization
 │           └── ingestion_utils.py # Document processing helpers
 ├── data/                       # Raw PDF source documents
-└── vector_store/              # Persistent ChromaDB vector database
+└── vector_store/              # Persistent Pinecone vector database (cloud) + BM25 cache
 ├── requirements.txt           # Python backend dependencies
 ├── package.json               # Frontend Node.js dependencies
 ├── Dockerfile                 # Containerization configuration
@@ -145,4 +145,6 @@ For the canonical pipeline diagram and node-by-node responsibility matrix, see `
 ### Component Notes
 1. **State Definition (`server/agent/state.py`)** — `AgentState` TypedDict with fields including `session_id`, `chat_history`, `memory_summary`, `query`, `is_scenario`, `requires_case_law`, `documents`, `case_laws`, `generation`, `iteration_count`, plus `ingest_*` fields for the ingestion graph.
 2. **Self-Corrective RAG (`server/agent/node/`)** — `grader` evaluates retrieved docs; if `retry_retrieval` is set, request loops through `rewriter` → `retriever`. `generator` enforces strict context adherence.
-3. **Chat Session Persistence** — Sessions are persisted as JSON files at `data/chats/{session_id}.json` by `server/api/routes.py`. No separate `history.py` module exists.
+3. **Hybrid Retrieval** — Dense (NVIDIA Nemotron embeddings via Pinecone) + Sparse (BM25 in-memory, rebuilt from Pinecone, cached to disk). Fused via RRF (`server/agent/node/retriever.py`).
+4. **Chat Session Persistence** — Sessions are persisted as JSON files at `data/chats/{session_id}.json` by `server/api/routes.py`. No separate `history.py` module exists.
+5. **Model Configuration** — Chat and embedding models configurable via environment variables (see `.env.example`).

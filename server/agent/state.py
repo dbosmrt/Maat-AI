@@ -127,6 +127,25 @@ class SearchQueries(BaseModel):
     )
 
 
+class GeneratorOutput(BaseModel):
+    """Structured output for the generator node (form generation and chat)."""
+
+    generation: str = Field(
+        description="The final legal response text in Markdown format."
+    )
+    law_domain: str = Field(
+        description="The legal domain of the response (e.g., 'Criminal', 'Civil', 'General')."
+    )
+
+
+class RewriterOutput(BaseModel):
+    """Structured output for the rewriter node."""
+
+    rewritten_query: str = Field(
+        description="The rewritten query optimized for semantic vector search."
+    )
+
+
 class AgentState(TypedDict):
     """The state schema for the Legal RAG Chatbot LangGraph."""
 

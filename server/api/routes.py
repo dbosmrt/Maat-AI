@@ -2,9 +2,16 @@ import os
 import json
 import uuid
 import time
-from typing import List
+from typing import List, Tuple, Any
 from fastapi import APIRouter, HTTPException, Depends
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langchain_core.messages.utils import get_buffer_string
+
+try:
+    import tiktoken
+    _HAS_TIKTOKEN = True
+except ImportError:
+    _HAS_TIKTOKEN = False
 
 from api.models import ChatRequest, ChatResponse, StartSessionResponse, ChatHistoryResponse, SessionItem, SessionListResponse
 from api.security import get_api_key
@@ -14,10 +21,68 @@ from agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Token limit for chat history (leave room for prompt + response)
+_MAX_HISTORY_TOKENS = 3000
+_ENCODING = "cl100k_base"  # GPT-4 / cl100k_base encoding
+
+
+def _count_tokens(messages: List[BaseMessage]) -> int:
+    """
+    Count tokens in a list of messages using tiktoken if available,
+    otherwise estimate from character count.
+    """
+    if _HAS_TIKTOKEN:
+        try:
+            encoding = tiktoken.get_encoding(_ENCODING)
+            text = get_buffer_string(messages)
+            return len(encoding.encode(text))
+        except Exception:
+            pass
+    # Fallback: rough estimate ~4 chars per token
+    text = get_buffer_string(messages)
+    return max(1, len(text) // 4)
+
+
+def _truncate_history_to_token_limit(
+    messages: List[BaseMessage],
+    max_tokens: int = _MAX_HISTORY_TOKENS
+) -> List[BaseMessage]:
+    """
+    Truncate message history to fit within token limit.
+    Keeps most recent messages first (sliding window from end).
+    """
+    if not messages:
+        return []
+
+    count = _count_tokens(messages)
+    if count <= max_tokens:
+        return messages
+
+    # Sliding window from the end - keep most recent messages
+    for i in range(1, len(messages) + 1):
+        trimmed = messages[-i:]
+        if _count_tokens(trimmed) <= max_tokens:
+            return trimmed
+
+    # If even 1 message exceeds, return just that
+    logger.warning(
+        "Single message exceeds token limit (%d tokens), returning as-is",
+        _count_tokens([messages[-1]])
+    )
+    return [messages[-1]]
+
 router = APIRouter()
 
-# Global graph instance for the API
-chat_graph = build_chat_graph()
+# Lazy graph instance - compiled on first use
+_chat_graph = None
+
+
+def get_chat_graph():
+    """Get or create the compiled chat graph (lazy initialization)."""
+    global _chat_graph
+    if _chat_graph is None:
+        _chat_graph = build_chat_graph()
+    return _chat_graph
 
 CHAT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "chats"))
 os.makedirs(CHAT_DIR, exist_ok=True)
@@ -137,24 +202,56 @@ def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(ge
     # Append the new user query
     lc_history.append(HumanMessage(content=request.query))
 
-    # Construct AgentState
-    state = AgentState(
-        query=request.query,
-        session_id=session_id,
-        chat_history=lc_history[-4:], # limit context
-        memory_summary=memory_summary,
-        is_scenario=False,
-        requires_case_law=False,
-        search_required=False,
-        documents=[],
-        case_laws=[],
-        generation="",
-        iteration_count=0
-    )
+    # Token-aware history truncation
+    # Use tiktoken to count tokens and keep history within budget
+    MAX_HISTORY_TOKENS = int(os.environ.get("MAX_HISTORY_TOKENS", "4000"))
+
+    def _count_message_tokens(messages: List[Any]) -> int:
+        """Count tokens in a list of messages using tiktoken."""
+        try:
+            import tiktoken
+            # Use cl100k_base which is compatible with most modern models
+            encoding = tiktoken.get_encoding("cl100k_base")
+            total = 0
+            for msg in messages:
+                # Count tokens in message content
+                total += len(encoding.encode(msg.content))
+                # Add overhead for message role (roughly 4 tokens per message)
+                total += 4
+            return total
+        except ImportError:
+            # Fallback: rough estimate (1 token ≈ 4 chars)
+            return sum(len(getattr(m, "content", "")) for m in messages) // 4
+
+    def _truncate_history_by_tokens(messages: List[Any], max_tokens: int) -> List[Any]:
+        """Truncate messages from the start to fit within token budget."""
+        if not messages:
+            return []
+
+        # Count total tokens
+        total_tokens = _count_message_tokens(messages)
+
+        if total_tokens <= max_tokens:
+            return messages
+
+        # Remove oldest messages until we fit
+        while messages and total_tokens > max_tokens:
+            removed = messages.pop(0)
+            # Recalculate (could be optimized by subtracting, but this is safer)
+            total_tokens = _count_message_tokens(messages)
+
+        logger.debug(
+            f"Truncated history from {len(messages) + (total_tokens - max_tokens)//4} "
+            f"to {len(messages)} messages ({total_tokens} tokens, budget {max_tokens})"
+        )
+        return messages
+
+    # Get token-limited history
+    lc_history = _truncate_history_by_tokens(lc_history, MAX_HISTORY_TOKENS)
 
     # Invoke Graph
     try:
-        result = chat_graph.invoke(state)
+        result = get_chat_graph().invoke(state)
     except Exception as e:
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         logger.error(f"Pipeline failed after {elapsed_ms:.0f}ms for session {session_id}: {e}")

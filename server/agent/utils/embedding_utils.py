@@ -17,6 +17,9 @@ _DEFAULT_REGION = "us-east-1"
 _DEFAULT_DIM = 1024
 _DEFAULT_METRIC = "cosine"
 
+# Expected embedding dimension - must match the Pinecone index
+EXPECTED_EMBEDDING_DIM = int(os.environ.get("PINECONE_DIM", _DEFAULT_DIM))
+
 
 def _resolve_api_key() -> str:
     """Return the Pinecone API key from env, supporting legacy var name."""
@@ -57,6 +60,27 @@ def _ensure_pinecone_index(pc: Pinecone, name: str) -> None:
         raise
 
 
+def _validate_embedding_dimension(embeddings: Embeddings) -> None:
+    """
+    Validate that the embedding model produces vectors matching Pinecone index dimension.
+
+    Raises ValueError if dimensions don't match.
+    """
+    try:
+        test_vector = embeddings.embed_query("dimension check")
+        actual_dim = len(test_vector)
+        if actual_dim != EXPECTED_EMBEDDING_DIM:
+            raise ValueError(
+                f"Embedding dimension mismatch: model produces {actual_dim}-dim vectors "
+                f"but Pinecone index expects {EXPECTED_EMBEDDING_DIM}. "
+                f"Set PINECONE_DIM={actual_dim} or use a compatible model."
+            )
+    except Exception as exc:
+        # If validation fails, log warning but don't block (might be transient)
+        import logging
+        logging.getLogger(__name__).warning("Could not validate embedding dimension: %s", exc)
+
+
 class VectorDatabases:
     """Single-source vector-store facade backed by Pinecone."""
 
@@ -88,6 +112,9 @@ class VectorDatabases:
         """
         if embeddings is None:
             embeddings = EmbeddingModels.get_nemotron_embed()
+        else:
+            # Validate fallback embedding dimension matches index
+            _validate_embedding_dimension(embeddings)
 
         pc = VectorDatabases.get_pinecone_client()
         name = _resolve_index_name()

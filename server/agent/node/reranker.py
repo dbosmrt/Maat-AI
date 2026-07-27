@@ -40,7 +40,7 @@ def reranker_node(state: AgentState) -> dict:
             "format_instructions": "Format: STRICT JSON MATCH. DO NOT USE MARKDOWN."
         })
 
-        ranking_dict = ranking.dict() if hasattr(ranking, "dict") else dict(ranking)
+        ranking_dict = ranking.model_dump() if hasattr(ranking, "model_dump") else (ranking.dict() if hasattr(ranking, "dict") else dict(ranking))
         relevant_indices = ranking_dict.get("relevant_indices", [])
 
         # Filter the original documents list based on the returned indices

@@ -1,15 +1,20 @@
+import os
+import traceback
 from agent.utils.logger import get_logger, log_node_event, log_system_error
 from duckduckgo_search import DDGS
 from langchain_core.output_parsers import JsonOutputParser
 from agent.state import AgentState, SearchQueries
 from agent.model import ChatModels
 from agent.prompt.search_query_prompt import get_search_query_prompt
-import traceback
 
 logger = get_logger(__name__)
 
+# Configuration from environment with defaults
+DDGS_REGION = os.environ.get("DDGS_REGION", "in-en")
+DDGS_MAX_RESULTS = int(os.environ.get("DDGS_MAX_RESULTS", "3"))
+
 # Maximum raw query length before we invoke the LLM summarizer
-QUERY_SUMMARIZE_THRESHOLD = 120
+QUERY_SUMMARIZE_THRESHOLD = int(os.environ.get("QUERY_SUMMARIZE_THRESHOLD", "120"))
 
 
 def _summarize_query(query: str) -> list[str]:
@@ -28,7 +33,7 @@ def _summarize_query(query: str) -> list[str]:
             "format_instructions": "Format: STRICT JSON MATCH. DO NOT USE MARKDOWN."
         })
 
-        result_dict = result.dict() if hasattr(result, "dict") else dict(result)
+        result_dict = result.model_dump() if hasattr(result, "model_dump") else (result.dict() if hasattr(result, "dict") else dict(result))
         queries = result_dict.get("search_queries", [])
 
         if queries:
@@ -73,7 +78,7 @@ def web_search_node(state: AgentState) -> dict:
         with DDGS() as ddgs:
             for sq in search_queries:
                 logger.info(f"  Searching: '{sq}'")
-                ddg_results = ddgs.text(sq, region='in-en', max_results=3)
+                ddg_results = ddgs.text(sq, region=DDGS_REGION, max_results=DDGS_MAX_RESULTS)
 
                 for r in ddg_results:
                     link = r.get("href", "")

@@ -2,11 +2,9 @@
 
 import traceback
 
-from langchain_core.output_parsers import StrOutputParser
-
 from agent.model import ChatModels
 from agent.prompt.generator_prompt import get_generator_prompt
-from agent.state import AgentState
+from agent.state import AgentState, GeneratorOutput
 from agent.utils.logger import get_logger, log_node_event, log_system_error
 
 logger = get_logger(__name__)
@@ -21,8 +19,8 @@ def generator_node(state: AgentState) -> dict:
             `case_laws`, `memory_summary`, and `is_scenario`.
 
     Returns:
-        A dict with the new `generation` field. On LLM failure, returns a
-        graceful fallback message.
+        A dict with the new `generation` and `law_domain` fields.
+        On LLM failure, returns a graceful fallback message.
     """
     query = state.get("query", "")
     documents = state.get("documents", [])
@@ -47,9 +45,9 @@ def generator_node(state: AgentState) -> dict:
         memory_summary if memory_summary else "No prior conversation history."
     )
 
-    # Initialize LLM and Parser
+    # Initialize LLM and Parser with structured output
     llm = ChatModels.get_sarvam_m()
-    parser = StrOutputParser()
+    structured_llm = llm.with_structured_output(GeneratorOutput)
 
     # Customize instructions based on whether it is a scenario or direct question
     scenario_instruction = ""
@@ -62,10 +60,10 @@ def generator_node(state: AgentState) -> dict:
 
     prompt = get_generator_prompt(scenario_instruction)
 
-    chain = prompt | llm | parser
+    chain = prompt | structured_llm
 
     try:
-        generation = chain.invoke(
+        result = chain.invoke(
             {
                 "query": query,
                 "memory_text": memory_text,
@@ -77,7 +75,10 @@ def generator_node(state: AgentState) -> dict:
         logger.info("Generator Node: Response successfully generated.")
         log_node_event("generator_node", "SUCCESS")
 
-        return {"generation": generation}
+        return {
+            "generation": result.generation,
+            "law_domain": result.law_domain,
+        }
 
     except (RuntimeError, ValueError, ConnectionError) as exc:
         logger.error("Generator node failed: %s", exc)
@@ -87,5 +88,6 @@ def generator_node(state: AgentState) -> dict:
             "generation": (
                 "I apologize, but I encountered an internal error while "
                 "generating your legal response. Please try again."
-            )
+            ),
+            "law_domain": "General",
         }
