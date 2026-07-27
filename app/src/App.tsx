@@ -26,13 +26,16 @@ export default function App() {
   const [lawDomain, setLawDomain] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Track previous message count to only auto-scroll on new messages
+  const prevMessageCountRef = useRef(messages.length);
 
-  /* ── Auto-scroll on new messages ── */
+  /* ── Auto-scroll on NEW messages only ── */
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (messages.length > prevMessageCountRef.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, isLoading]);
+    prevMessageCountRef.current = messages.length;
+  }, [messages]);
 
   /* ── Load sessions on mount (after splash) ── */
   useEffect(() => {
@@ -100,17 +103,16 @@ export default function App() {
   }, [activeSessionId]);
 
   const handleSendMessage = useCallback(async (text: string) => {
-    // If no active session, create one first
-    let sessionId = activeSessionId;
+    // Require an active session - no implicit creation
+    const sessionId = activeSessionId;
     if (!sessionId) {
-      try {
-        const result = await startSession();
-        sessionId = result.session_id;
-        setActiveSessionId(sessionId);
-      } catch {
-        console.error("Cannot create session");
-        return;
-      }
+      // Show a temporary message in chat area to prompt session creation
+      const promptMsg: Message = {
+        type: "ai",
+        content: "Please create a new chat session first using the 'New Chat' button in the sidebar.",
+      };
+      setMessages((prev) => [...prev, promptMsg]);
+      return;
     }
 
     // Add user message to UI
@@ -170,7 +172,7 @@ export default function App() {
             onSuggestionClick={handleSuggestionClick}
             lawDomain={lawDomain}
           />
-          <ChatInput onSend={handleSendMessage} disabled={isLoading} />
+          <ChatInput onSend={handleSendMessage} disabled={isLoading} hasSession={!!activeSessionId} />
           {/* Invisible anchor for auto-scroll */}
           <div ref={messagesEndRef} />
         </main>

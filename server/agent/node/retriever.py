@@ -12,6 +12,7 @@ ingestion must call `invalidate_bm25_cache()` after upserts.
 
 import os
 import time
+import threading
 from typing import Any, Dict, List
 
 from langchain_core.documents import Document
@@ -26,6 +27,7 @@ logger = get_logger(__name__)
 
 # Module-level BM25 cache. Rebuilt lazily on first retrieval after invalidation.
 _bm25_cache: Dict[str, BM25Retriever | _EmptyBM25Retriever | None] = {"instance": None}
+_bm25_lock = threading.Lock()  # Thread safety for cache rebuild
 
 _BM25_TOP_K = 20
 _DENSE_TOP_K = 20
@@ -62,31 +64,53 @@ def _fetch_all_chunks_from_pinecone() -> List[Document]:
     Pull every chunk currently stored in the Pinecone index and return them
     as LangChain `Document` objects.
 
-    Uses a zero-vector query with the maximum allowed `top_k`. This is fine
-    for serverless indices up to ~10k records — sufficient for the legal
-    corpus. For larger corpora, paginate or switch to a dedicated sparse
-    index.
+    Uses Pinecone's list + fetch approach instead of zero-vector query to
+    avoid arbitrary/random results. Fetches in batches to respect API limits.
     """
     raw_index = VectorDatabases.get_raw_index()
-    dimension = int(os.environ.get("PINECONE_DIM", "1024"))
-
-    try:
-        result = raw_index.query(
-            vector=[0.0] * dimension,
-            top_k=_PINECONE_FETCH_TOP_K,
-            include_metadata=True,
-        )
-    except (RuntimeError, ConnectionError, ValueError) as exc:
-        logger.error("Failed to fetch chunks from Pinecone for BM25: %s", exc)
-        raise
 
     docs: List[Document] = []
-    for match in result.matches:
-        metadata = dict(match.metadata or {})
-        # langchain-pinecone stores `page_content` under the metadata key
-        # `text` by default; fall back to `page_content` for safety.
-        page_content = metadata.pop("text", metadata.pop("page_content", ""))
-        docs.append(Document(page_content=page_content, metadata=metadata))
+
+    try:
+        # Get all vector IDs using list (paginated)
+        all_ids = []
+        paginator = raw_index.list()
+        for page in paginator:
+            all_ids.extend(page)
+
+        if not all_ids:
+            logger.warning("Pinecone index has no vectors — BM25 will be empty.")
+            return []
+
+        # Fetch in batches (Pinecone fetch max is 1000 IDs per call)
+        BATCH_SIZE = 1000
+        for i in range(0, len(all_ids), BATCH_SIZE):
+            batch_ids = all_ids[i:i + BATCH_SIZE]
+            fetch_result = raw_index.fetch(batch_ids)
+            for match in fetch_result.vectors.values():
+                metadata = dict(match.metadata or {})
+                page_content = metadata.pop("text", metadata.pop("page_content", ""))
+                docs.append(Document(page_content=page_content, metadata=metadata))
+
+    except (RuntimeError, ConnectionError, ValueError, AttributeError) as exc:
+        logger.error("Failed to fetch chunks from Pinecone for BM25: %s", exc)
+        # Fallback: try zero-vector query as last resort (may return random results)
+        logger.warning("Falling back to zero-vector query for BM25 rebuild (results may be random)")
+        try:
+            dimension = int(os.environ.get("PINECONE_DIM", "1024"))
+            result = raw_index.query(
+                vector=[0.0] * dimension,
+                top_k=_PINECONE_FETCH_TOP_K,
+                include_metadata=True,
+            )
+            for match in result.matches:
+                metadata = dict(match.metadata or {})
+                page_content = metadata.pop("text", metadata.pop("page_content", ""))
+                docs.append(Document(page_content=page_content, metadata=metadata))
+        except Exception as fallback_exc:
+            logger.error("Zero-vector fallback also failed: %s", fallback_exc)
+            raise
+
     return docs
 
 

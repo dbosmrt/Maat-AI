@@ -3,9 +3,10 @@ import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from "react";
 interface ChatInputProps {
   onSend: (message: string) => void;
   disabled: boolean;
+  hasSession: boolean;
 }
 
-export default function ChatInput({ onSend, disabled }: ChatInputProps) {
+export default function ChatInput({ onSend, disabled, hasSession }: ChatInputProps) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -36,6 +37,11 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
     setValue(e.target.value);
   };
 
+  const isDisabled = disabled || !hasSession;
+  const placeholder = hasSession
+    ? "Ask Ma'at a legal question..."
+    : "Create a new chat session first using the 'New Chat' button in the sidebar";
+
   return (
     <div className="chat-input-wrapper">
       <div className="chat-input-container" id="chat-input-container">
@@ -46,15 +52,15 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="Ask Ma'at a legal question..."
+          placeholder={placeholder}
           rows={1}
-          disabled={disabled}
+          disabled={isDisabled}
         />
         <button
           className="send-btn"
           id="send-btn"
           onClick={handleSend}
-          disabled={disabled || !value.trim()}
+          disabled={isDisabled || !value.trim()}
           aria-label="Send message"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
