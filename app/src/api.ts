@@ -52,6 +52,8 @@ export interface SessionItem {
 export interface Message {
   type: "human" | "ai";
   content: string;
+  isError?: boolean;
+  errorMessage?: string;
 }
 
 export interface ChatResponse {

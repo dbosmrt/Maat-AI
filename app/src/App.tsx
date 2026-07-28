@@ -1,8 +1,11 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import SplashScreen from "./components/SplashScreen";
 import Sidebar from "./components/Sidebar";
 import ChatArea from "./components/ChatArea";
 import ChatInput from "./components/ChatInput";
+import { ToastProvider, useToast } from "./hooks/useToast";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import {
   SessionItem,
   Message,
@@ -15,7 +18,7 @@ import {
 
 type AppPhase = "splash" | "chat";
 
-export default function App() {
+function AppContent() {
   /* ── State ── */
   const [phase, setPhase] = useState<AppPhase>("splash");
   const [sessions, setSessions] = useState<SessionItem[]>([]);
@@ -25,8 +28,9 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [lawDomain, setLawDomain] = useState<string | null>(null);
 
+  const { showToast } = useToast();
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  // Track previous message count to only auto-scroll on new messages
   const prevMessageCountRef = useRef(messages.length);
 
   /* ── Auto-scroll on NEW messages only ── */
@@ -44,15 +48,24 @@ export default function App() {
     }
   }, [phase]);
 
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
       const data = await getSessions();
       setSessions(data);
     } catch {
-      // Backend might not be running — that's fine, sessions stay empty
+      showToast({
+        type: "warning",
+        title: "Backend unavailable",
+        message: "Could not load sessions. Is the backend running?",
+        duration: 0,
+        action: {
+          label: "Retry",
+          onClick: loadSessions,
+        },
+      });
       console.warn("Could not load sessions. Is the backend running?");
     }
-  };
+  }, [showToast]);
 
   /* ── Handlers ── */
 
@@ -67,14 +80,41 @@ export default function App() {
       setMessages([]);
       setLawDomain(null);
       await loadSessions();
+      showToast({ type: "success", title: "New chat started" });
     } catch {
-      // If backend is down, just reset locally
       setActiveSessionId(null);
       setMessages([]);
       setLawDomain(null);
+      showToast({ type: "error", title: "Failed to start chat", message: "Backend may be unavailable" });
     }
     setSidebarOpen(false);
-  }, []);
+  }, [loadSessions, showToast]);
+
+  /* ── Keyboard shortcuts ── */
+  const shortcuts = useMemo(
+    () => [
+      {
+        key: "n",
+        ctrl: true,
+        action: handleNewChat,
+        description: "New chat",
+      },
+      {
+        key: "/",
+        ctrl: true,
+        action: () => setSidebarOpen(true),
+        description: "Focus search",
+      },
+      {
+        key: "Escape",
+        action: () => setSidebarOpen(false),
+        description: "Close sidebar",
+      },
+    ],
+    [handleNewChat]
+  );
+
+  useKeyboardShortcuts(shortcuts);
 
   const handleSelectSession = useCallback(async (sessionId: string) => {
     setActiveSessionId(sessionId);
@@ -84,9 +124,10 @@ export default function App() {
       setMessages(history);
     } catch {
       setMessages([]);
+      showToast({ type: "error", title: "Failed to load history" });
     }
     setSidebarOpen(false);
-  }, []);
+  }, [showToast]);
 
   const handleDeleteSession = useCallback(async (sessionId: string) => {
     try {
@@ -97,21 +138,23 @@ export default function App() {
         setLawDomain(null);
       }
       await loadSessions();
+      showToast({ type: "success", title: "Conversation deleted" });
     } catch (err) {
       console.error("Failed to delete session:", err);
+      showToast({ type: "error", title: "Failed to delete" });
     }
-  }, [activeSessionId]);
+  }, [activeSessionId, loadSessions, showToast]);
 
   const handleSendMessage = useCallback(async (text: string) => {
     // Require an active session - no implicit creation
     const sessionId = activeSessionId;
     if (!sessionId) {
-      // Show a temporary message in chat area to prompt session creation
-      const promptMsg: Message = {
-        type: "ai",
-        content: "Please create a new chat session first using the 'New Chat' button in the sidebar.",
-      };
-      setMessages((prev) => [...prev, promptMsg]);
+      showToast({
+        type: "warning",
+        title: "No active chat",
+        message: "Create a new chat session first using the sidebar",
+        action: { label: "New Chat", onClick: handleNewChat },
+      });
       return;
     }
 
@@ -125,19 +168,66 @@ export default function App() {
       const aiMsg: Message = { type: "ai", content: response.generation };
       setMessages((prev) => [...prev, aiMsg]);
       setLawDomain(response.law_domain);
-      // Refresh session list to update previews
       await loadSessions();
     } catch (err) {
       const errorMsg: Message = {
         type: "ai",
         content: "Sorry, I encountered an error processing your request. Please make sure the backend server is running.",
+        isError: true,
+        errorMessage: err instanceof Error ? err.message : "Unknown error",
       };
       setMessages((prev) => [...prev, errorMsg]);
       console.error("Send message error:", err);
+      showToast({ type: "error", title: "Error sending message", message: "Please try again" });
     } finally {
       setIsLoading(false);
     }
-  }, [activeSessionId]);
+  }, [activeSessionId, handleNewChat, loadSessions, showToast]);
+
+  const handleRegenerate = useCallback(async (messageIndex: number) => {
+    // Find the user message before this AI message
+    const messagesBefore = messages.slice(0, messageIndex);
+    let userMsgIndex = -1;
+    for (let i = messagesBefore.length - 1; i >= 0; i--) {
+      if (messagesBefore[i].type === "human") {
+        userMsgIndex = i;
+        break;
+      }
+    }
+    if (userMsgIndex === -1) return;
+
+    const userMessage = messages[userMsgIndex].content;
+    const sessionId = activeSessionId;
+    if (!sessionId) return;
+
+    // Remove messages after the user message (including the AI response)
+    setMessages((prev) => prev.slice(0, userMsgIndex + 1));
+    setIsLoading(true);
+
+    try {
+      const response = await sendMessage(sessionId, userMessage);
+      const aiMsg: Message = { type: "ai", content: response.generation };
+      setMessages((prev) => [...prev, aiMsg]);
+      setLawDomain(response.law_domain);
+      await loadSessions();
+      showToast({ type: "success", title: "Regenerated response" });
+    } catch (err) {
+      console.error("Regenerate error:", err);
+      showToast({ type: "error", title: "Failed to regenerate" });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [messages, activeSessionId, loadSessions, showToast]);
+
+  // Listen for regenerate events from ChatArea
+  useEffect(() => {
+    const handleRegenerateEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<{ index: number }>;
+      handleRegenerate(customEvent.detail.index);
+    };
+    window.addEventListener("regenerate-message", handleRegenerateEvent as EventListener);
+    return () => window.removeEventListener("regenerate-message", handleRegenerateEvent as EventListener);
+  }, [handleRegenerate]);
 
   const handleSuggestionClick = useCallback((text: string) => {
     handleSendMessage(text);
@@ -150,9 +240,7 @@ export default function App() {
   /* ── Render ── */
   return (
     <>
-      {phase === "splash" && (
-        <SplashScreen onComplete={handleSplashComplete} />
-      )}
+      {phase === "splash" && <SplashScreen onComplete={handleSplashComplete} />}
 
       <div className="app-layout" id="app-layout">
         <Sidebar
@@ -172,11 +260,24 @@ export default function App() {
             onSuggestionClick={handleSuggestionClick}
             lawDomain={lawDomain}
           />
-          <ChatInput onSend={handleSendMessage} disabled={isLoading} hasSession={!!activeSessionId} />
-          {/* Invisible anchor for auto-scroll */}
+          <ChatInput
+            onSend={handleSendMessage}
+            disabled={isLoading}
+            hasSession={!!activeSessionId}
+          />
           <div ref={messagesEndRef} />
         </main>
       </div>
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
