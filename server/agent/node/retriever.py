@@ -65,14 +65,27 @@ def reciprocal_rank_fusion(
 
 
 def _get_pinecone_version() -> str:
-    """Get a version hash of the Pinecone index contents for cache invalidation."""
+    """Get a version hash of the Pinecone index contents for cache invalidation.
+
+    Includes namespace-level vector counts and index name to detect content changes
+    even when total vector count remains the same (e.g., document updates).
+    """
     try:
         raw_index = VectorDatabases.get_raw_index()
         stats = raw_index.describe_index_stats()
-        # Create a hash from total vector count and index name
         index_name = VectorDatabases.get_pinecone_index_name()
         total_vectors = stats.get("total_vector_count", 0)
-        return hashlib.sha256(f"{index_name}:{total_vectors}".encode()).hexdigest()[:16]
+
+        # Include namespace-level counts to catch updates within same total count
+        namespaces = stats.get("namespaces", {})
+        ns_parts = []
+        for ns_name, ns_stats in sorted(namespaces.items()):
+            ns_count = ns_stats.get("vector_count", 0)
+            ns_parts.append(f"{ns_name}:{ns_count}")
+
+        # Hash: index_name + total_vectors + namespace breakdown
+        version_string = f"{index_name}:{total_vectors}:{';'.join(ns_parts)}"
+        return hashlib.sha256(version_string.encode()).hexdigest()[:16]
     except Exception as exc:
         logger.warning("Could not get Pinecone version for cache: %s", exc)
         return "unknown"

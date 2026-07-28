@@ -66,19 +66,14 @@ def _validate_embedding_dimension(embeddings: Embeddings) -> None:
 
     Raises ValueError if dimensions don't match.
     """
-    try:
-        test_vector = embeddings.embed_query("dimension check")
-        actual_dim = len(test_vector)
-        if actual_dim != EXPECTED_EMBEDDING_DIM:
-            raise ValueError(
-                f"Embedding dimension mismatch: model produces {actual_dim}-dim vectors "
-                f"but Pinecone index expects {EXPECTED_EMBEDDING_DIM}. "
-                f"Set PINECONE_DIM={actual_dim} or use a compatible model."
-            )
-    except Exception as exc:
-        # If validation fails, log warning but don't block (might be transient)
-        import logging
-        logging.getLogger(__name__).warning("Could not validate embedding dimension: %s", exc)
+    test_vector = embeddings.embed_query("dimension check")
+    actual_dim = len(test_vector)
+    if actual_dim != EXPECTED_EMBEDDING_DIM:
+        raise ValueError(
+            f"Embedding dimension mismatch: model produces {actual_dim}-dim vectors "
+            f"but Pinecone index expects {EXPECTED_EMBEDDING_DIM}. "
+            f"Set PINECONE_DIM={actual_dim} or use a compatible model."
+        )
 
 
 class VectorDatabases:
