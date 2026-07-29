@@ -34,7 +34,7 @@ def test_qualifier_node(query, expected_domain, expected_scenario, expected_case
     Tests if the LLM correctly parses and classifies various legal intents.
     """
     logger.info(f"--- Testing Query: {query} ---")
-    
+
     # Initialize mock state
     state = AgentState(
         query=query,
@@ -46,16 +46,16 @@ def test_qualifier_node(query, expected_domain, expected_scenario, expected_case
         generation="",
         iteration_count=0
     )
-    
+
     # Execute Node
     result = qualifier_node(state)
-    
+
     # Check outputs
     assert "law_domain" in result
     assert result["law_domain"] == expected_domain, f"Expected {expected_domain}, got {result.get('law_domain')}"
-    
+
     assert "is_scenario" in result
     assert result["is_scenario"] == expected_scenario, f"Expected scenario={expected_scenario}, got {result.get('is_scenario')}"
-    
+
     assert "requires_case_law" in result
     assert result["requires_case_law"] == expected_case_law, f"Expected case_law={expected_case_law}, got {result.get('requires_case_law')}"

@@ -8,30 +8,35 @@ fastapi==0.115.0
 uvicorn[standard]==0.32.0
 
 # NVIDIA NIM / OpenAI-compatible clients
-openai==1.58.1
+openai==1.109.1
 langchain-nvidia-ai-endpoints==1.4.1
 
 # LangChain Ecosystem - pinned for stability
-langgraph==0.2.34
-langchain==0.3.7
-langchain-core==0.3.26
-langchain-community==0.3.7
+# langchain 1.3.14 requires langchain-core>=1.4.9,<2.0.0
+# langgraph 1.2.9 requires langchain-core>=1.4.7,<2
+# langchain-community 0.3.31 requires langchain-core>=0.3.78,<2
+# langchain-nvidia-ai-endpoints 1.4.1 requires langchain-core>=1.2.5,<2.0.0
+langgraph==1.2.9
+langchain==1.3.14
+langchain-core==1.5.1
+langchain-community==0.4.2
 
-langchain-docling==0.1.0
+langchain-docling==2.0.0
 
 # --- Vector store: Pinecone ---
 # langchain-pinecone 0.2.x requires pinecone<8.0.0
-pinecone==7.2.4
+pinecone==7.3.0
 langchain-pinecone==0.2.13
+langchain-openai==1.0.0  # Required for langchain-core>=1.5 and openai>=1.109 compatibility
 
-langchain-text-splitters==0.3.3
+langchain-text-splitters==1.1.2
 
 # Web Search
 duckduckgo-search==7.1.0
 
 # Validation & Serialization
-pydantic==2.9.2
-pydantic-settings==2.3.4
+pydantic==2.11.1
+pydantic-settings==2.10.1
 python-multipart==0.0.9
 
 # Token counting for history truncation

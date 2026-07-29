@@ -4,12 +4,13 @@ Pytest suite for the ingestion node, covering fallback logic and LangGraph state
 
 import sys
 import os
+
+# Ensure server module can be imported before other imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../server')))
+
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
-
-# Ensure server module can be imported
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../server')))
 
 from agent.node.ingestion import ingestion_node
 from agent.utils.ingestion_utils import process_pdf_with_fallback

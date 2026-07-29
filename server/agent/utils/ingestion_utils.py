@@ -188,7 +188,7 @@ def parse_pdf_with_docling(file_path: str, output_dir: str) -> bool:
         True on success, False if Docling is unavailable or fails.
     """
     try:
-        from langchain_docling import DoclingLoader
+        from langchain_docling import DoclingLoader  # type: ignore[import-not-found]
         logger.info("Attempting to parse %s using DoclingLoader...", file_path)
         loader = DoclingLoader(file_path=file_path)
         docs = loader.load()
@@ -252,7 +252,7 @@ def parse_pdf_with_pymupdf(file_path: str, output_dir: str) -> bool:
         True on success, False if PyMuPDF is unavailable or fails.
     """
     try:
-        import fitz  # pymupdf
+        import fitz  # type: ignore[import-not-found]  # pymupdf
         logger.info("Attempting to parse %s using PyMuPDF...", file_path)
         doc = fitz.open(file_path)
         md_content = ""
@@ -286,7 +286,7 @@ def process_pdf_with_fallback(pdf_path: str, output_dir: str) -> bool:
     """
     gpu_available = False
     try:
-        import torch
+        import torch  # type: ignore[import-not-found]
         gpu_available = torch.cuda.is_available()
     except ImportError:
         pass

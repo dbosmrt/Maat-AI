@@ -7,7 +7,7 @@ embedding model, and storing them in the Pinecone vector store.
 """
 
 import time
-from typing import List
+from typing import Any, List, Union, TYPE_CHECKING, cast
 
 from langchain_core.documents import Document
 
@@ -28,7 +28,10 @@ def embedding_node(state: AgentState) -> dict:
     On success it invalidates the BM25 cache so the next retrieval pass
     rebuilds the sparse layer against the new chunks.
     """
-    documents: List[Document] = state.get("documents", [])
+    # During ingestion, documents are Document objects; during chat, they are strings.
+    # We only embed Document objects.
+    raw_docs = state.get("documents", [])
+    documents: List[Document] = cast(List[Document], [d for d in raw_docs if isinstance(d, Document)])
 
     if not documents:
         logger.warning("embedding_node skipped: No documents found in state to embed.")

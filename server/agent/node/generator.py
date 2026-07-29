@@ -1,6 +1,7 @@
 """Generator node: synthesizes the final legal response."""
 
 import traceback
+from typing import Union
 
 from agent.model import ChatModels
 from agent.prompt.generator_prompt import get_generator_prompt
@@ -63,7 +64,7 @@ def generator_node(state: AgentState) -> dict:
     chain = prompt | structured_llm
 
     try:
-        result = chain.invoke(
+        result: Union[dict, GeneratorOutput] = chain.invoke(
             {
                 "query": query,
                 "memory_text": memory_text,
@@ -75,9 +76,17 @@ def generator_node(state: AgentState) -> dict:
         logger.info("Generator Node: Response successfully generated.")
         log_node_event("generator_node", "SUCCESS")
 
+        # Type guard: result could be dict or GeneratorOutput depending on LLM implementation
+        if isinstance(result, dict):
+            generation = result.get("generation", "")
+            law_domain = result.get("law_domain", "General")
+        else:
+            generation = result.generation
+            law_domain = result.law_domain
+
         return {
-            "generation": result.generation,
-            "law_domain": result.law_domain,
+            "generation": generation,
+            "law_domain": law_domain,
         }
 
     except (RuntimeError, ValueError, ConnectionError) as exc:

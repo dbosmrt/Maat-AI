@@ -41,7 +41,9 @@ disable=
     raise-missing-from,
     unspecified-encoding,
     line-too-long,
-    unused-import
+    unused-import,
+    # Test files need to add sys.path before importing from server
+    wrong-import-position
 
 max-line-length=120
 ignore-paths=

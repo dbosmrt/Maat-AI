@@ -38,7 +38,7 @@ def ingestion_node(state: AgentState) -> dict:
     markdown_dir = state.get("ingest_markdown_dir", "")
     if markdown_dir:
         logger.info("Markdown ingestion mode detected. Input: %s", markdown_dir)
-        documents = process_markdown_files(markdown_dir)
+        documents = process_markdown_files(str(markdown_dir))
 
         if not documents:
             return {"ingest_status": "Failed: No markdown files found or processed"}

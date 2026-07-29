@@ -11,7 +11,7 @@ def test_chat_graph_compilation():
     Tests if the LangGraph workflow compiles successfully without routing errors.
     """
     logger.info("--- Testing Chat Graph Compilation ---")
-    
+
     try:
         app = build_chat_graph()
         assert app is not None, "Compiled graph should not be None."

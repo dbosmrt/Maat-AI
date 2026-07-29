@@ -31,7 +31,7 @@ from agent.utils.embedding_utils import VectorDatabases
 logger = get_logger(__name__)
 
 # Module-level BM25 cache. Rebuilt lazily on first retrieval after invalidation.
-_bm25_cache: Dict[str, BM25Retriever | _EmptyBM25Retriever | None] = {"instance": None}
+_bm25_cache: Dict[str, "BM25Retriever | _EmptyBM25Retriever | None"] = {"instance": None}
 _bm25_lock = threading.Lock()  # Thread safety for cache rebuild
 
 _BM25_TOP_K = 20
@@ -91,7 +91,7 @@ def _get_pinecone_version() -> str:
         return "unknown"
 
 
-def _load_bm25_from_cache() -> BM25Retriever | _EmptyBM25Retriever | None:
+def _load_bm25_from_cache() -> "BM25Retriever | _EmptyBM25Retriever | None":
     """Load BM25 retriever from disk cache if valid."""
     try:
         if not _BM25_CACHE_FILE.exists() or not _BM25_VERSION_FILE.exists():
@@ -172,9 +172,9 @@ def _fetch_all_chunks_from_pinecone() -> List[Document]:
             return []
 
         # Fetch in batches (Pinecone fetch max is 1000 IDs per call)
-        BATCH_SIZE = 1000
-        for i in range(0, len(all_ids), BATCH_SIZE):
-            batch_ids = all_ids[i:i + BATCH_SIZE]
+        batch_size = 1000
+        for i in range(0, len(all_ids), batch_size):
+            batch_ids = all_ids[i:i + batch_size]
             fetch_result = raw_index.fetch(batch_ids)
             for match in fetch_result.vectors.values():
                 metadata = dict(match.metadata or {})
@@ -213,7 +213,7 @@ class _EmptyBM25Retriever:
         return []
 
 
-def _get_bm25_retriever() -> BM25Retriever | _EmptyBM25Retriever:
+def _get_bm25_retriever() -> "BM25Retriever | _EmptyBM25Retriever":
     """Return the cached BM25 retriever, building it from Pinecone on demand."""
     # First check without lock (fast path)
     cached = _bm25_cache["instance"]

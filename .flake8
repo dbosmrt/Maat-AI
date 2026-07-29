@@ -2,11 +2,14 @@
 max-line-length = 120
 # E203: whitespace before ':'
 # E221: multiple spaces before operator
+# E226: missing whitespace around arithmetic operator (in f-strings, this is ok)
+# E241: multiple spaces after ':' or ','
 # E261: at least two spaces before inline comment
 # E302: expected 2 blank lines
 # E303: too many blank lines
 # E305: expected 2 blank lines after class or function definition
-# F401: imported but unused
+# E402: module level import not at top of file (required for test files to add sys.path)
 # E501: line too long
-# E241: multiple spaces after ':' or ','
-ignore = E203, E221, E241, E261, E302, E303, E305, E501, F401
+# F401: imported but unused
+ignore = E203, E221, E226, E241, E261, E302, E303, E305, E402, E501, F401
+exclude = .venv, venv, node_modules, .git, __pycache__, dist, build

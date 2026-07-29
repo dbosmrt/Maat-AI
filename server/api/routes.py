@@ -74,15 +74,14 @@ def _truncate_history_to_token_limit(
 router = APIRouter()
 
 # Lazy graph instance - compiled on first use
-_chat_graph = None
+_chat_graph_holder = {"instance": None}
 
 
 def get_chat_graph():
     """Get or create the compiled chat graph (lazy initialization)."""
-    global _chat_graph
-    if _chat_graph is None:
-        _chat_graph = build_chat_graph()
-    return _chat_graph
+    if _chat_graph_holder["instance"] is None:
+        _chat_graph_holder["instance"] = build_chat_graph()
+    return _chat_graph_holder["instance"]
 
 CHAT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "chats"))
 os.makedirs(CHAT_DIR, exist_ok=True)
@@ -191,7 +190,6 @@ def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(ge
     raw_history: List[dict] = raw_history_any if isinstance(raw_history_any, list) else []
 
     # Rebuild LangChain message objects
-    from typing import Any
     lc_history: List[Any] = []
     for msg in raw_history:
         if msg["type"] == "human":
@@ -204,14 +202,15 @@ def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(ge
 
     # Token-aware history truncation
     # Use tiktoken to count tokens and keep history within budget
-    MAX_HISTORY_TOKENS = int(os.environ.get("MAX_HISTORY_TOKENS", "4000"))
+    max_history_tokens = int(os.environ.get("MAX_HISTORY_TOKENS", "4000"))
 
     def _count_message_tokens(messages: List[Any]) -> int:
         """Count tokens in a list of messages using tiktoken."""
         try:
-            import tiktoken
+            import tiktoken as tiktoken_module
+
             # Use cl100k_base which is compatible with most modern models
-            encoding = tiktoken.get_encoding("cl100k_base")
+            encoding = tiktoken_module.get_encoding("cl100k_base")
             total = 0
             for msg in messages:
                 # Count tokens in message content
@@ -236,18 +235,40 @@ def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(ge
 
         # Remove oldest messages until we fit
         while messages and total_tokens > max_tokens:
-            removed = messages.pop(0)
+            messages.pop(0)
             # Recalculate (could be optimized by subtracting, but this is safer)
             total_tokens = _count_message_tokens(messages)
 
         logger.debug(
-            f"Truncated history from {len(messages) + (total_tokens - max_tokens)//4} "
+            f"Truncated history from {len(messages) + (total_tokens - max_tokens) // 4} "
             f"to {len(messages)} messages ({total_tokens} tokens, budget {max_tokens})"
         )
         return messages
 
     # Get token-limited history
-    lc_history = _truncate_history_by_tokens(lc_history, MAX_HISTORY_TOKENS)
+    lc_history = _truncate_history_by_tokens(lc_history, max_history_tokens)
+
+    # Build the initial state for the graph
+    state: AgentState = {
+        "session_id": session_id,
+        "chat_history": lc_history,
+        "memory_summary": memory_summary,
+        "query": request.query,
+        "decomposed_query": {},
+        "law_domain": "General",
+        "is_scenario": False,
+        "is_general_chat": False,
+        "requires_case_law": False,
+        "search_required": False,
+        "retry_retrieval": False,
+        "documents": [],
+        "case_laws": [],
+        "generation": "",
+        "iteration_count": 0,
+        "ingest_input_dir": "",
+        "ingest_output_dir": "",
+        "ingest_status": "",
+    }
 
     # Invoke Graph
     try:

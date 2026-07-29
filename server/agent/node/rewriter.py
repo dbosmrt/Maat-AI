@@ -3,6 +3,7 @@ from agent.state import AgentState, RewriterOutput
 from agent.model import ChatModels
 from agent.prompt.rewriter_prompt import get_rewriter_prompt
 import traceback
+from typing import Union, cast
 
 logger = get_logger(__name__)
 
@@ -24,8 +25,14 @@ def rewriter_node(state: AgentState) -> dict:
     chain = prompt | structured_llm
 
     try:
+        # chain.invoke returns Union[dict, BaseModel] but we know it's dict or RewriterOutput
         result = chain.invoke({"query": query})
-        new_query = result.rewritten_query.strip(' "\'')
+        result_typed = cast(Union[dict, RewriterOutput], result)
+        # Type guard: result could be dict or RewriterOutput depending on LLM implementation
+        if isinstance(result_typed, dict):
+            new_query = result_typed.get("rewritten_query", query).strip(' "\'')
+        else:
+            new_query = result_typed.rewritten_query.strip(' "\'')
         logger.info(f"Rewritten Query: {new_query}")
         log_node_event("rewriter_node", "SUCCESS")
 

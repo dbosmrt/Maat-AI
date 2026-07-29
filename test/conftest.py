@@ -1,5 +1,7 @@
 import sys
 import os
+
+# Insert path before other imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../server')))
 
 import pytest
@@ -15,6 +17,7 @@ from agent.state import (
     DocumentGrade,
     SearchQueries,
     DecomposedQuery,
+    GeneratorOutput,
 )
 
 
@@ -174,6 +177,21 @@ def mock_ddgs(monkeypatch):
     monkeypatch.setattr('duckduckgo_search.DDGS', lambda: mock_ddgs)
 
 
+# --- Factory functions that create proper Pydantic model instances ---
+
+
+def make_generator_output(prompt_text: str = "") -> GeneratorOutput:
+    """Create a GeneratorOutput instance for testing."""
+    return GeneratorOutput(
+        generation=(
+            "According to the retrieved legal sources, the punishment for theft under "
+            "Section 303 of the Bharatiya Nyaya Sanhita (BNS) is imprisonment of either "
+            "description for a term which may extend to three years, or with fine, or with both."
+        ),
+        law_domain="Criminal"
+    )
+
+
 # --- Per-node test fixtures (autouse when test file matches) ---
 
 @pytest.fixture(autouse=True)
@@ -183,6 +201,7 @@ def _mock_for_qualifier(request, monkeypatch):
 
     mock_llm = make_runnable_llm_direct()
     # For structured output, create a proper Runnable
+
     def with_structured_output(schema):
         return make_runnable_structured(lambda p: make_query_classification(p))
 
@@ -197,11 +216,16 @@ def _mock_for_reranker(request, monkeypatch):
         return
 
     mock_llm = make_runnable_llm_direct()
+
     def with_structured_output(schema):
         return make_runnable_structured(lambda p: make_document_ranking(p))
+
     mock_llm.with_structured_output = MagicMock(side_effect=with_structured_output)
 
-    monkeypatch.setattr('agent.node.reranker.ChatModels.get_sarvam_m', lambda: mock_llm)
+    monkeypatch.setattr(
+        'agent.node.reranker.ChatModels.get_sarvam_m',
+        lambda: mock_llm
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -210,11 +234,16 @@ def _mock_for_grader(request, monkeypatch):
         return
 
     mock_llm = make_runnable_llm_direct()
+
     def with_structured_output(schema):
         return make_runnable_structured(lambda p: make_document_grade(p))
+
     mock_llm.with_structured_output = MagicMock(side_effect=with_structured_output)
 
-    monkeypatch.setattr('agent.node.grader.ChatModels.get_sarvam_m', lambda: mock_llm)
+    monkeypatch.setattr(
+        'agent.node.grader.ChatModels.get_sarvam_m',
+        lambda: mock_llm
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -222,9 +251,20 @@ def _mock_for_generator(request, monkeypatch):
     if 'test_generator' not in request.module.__name__:
         return
 
-    # Generator uses direct invoke with StrOutputParser chain
     mock_llm = make_runnable_llm_direct()
-    monkeypatch.setattr('agent.node.generator.ChatModels.get_sarvam_m', lambda: mock_llm)
+
+    def with_structured_output(schema):
+        # Return a runnable that produces GeneratorOutput
+        def get_structured(prompt_text):
+            return make_generator_output(prompt_text)
+
+        return make_runnable_structured(get_structured)
+
+    mock_llm.with_structured_output = MagicMock(side_effect=with_structured_output)
+    monkeypatch.setattr(
+        'agent.node.generator.ChatModels.get_sarvam_m',
+        lambda: mock_llm
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -233,6 +273,7 @@ def _mock_for_web_search(request, monkeypatch):
         return
 
     mock_llm = make_runnable_llm_direct()
+
     def with_structured_output(schema):
         def get_structured(prompt_text):
             if "distill it into 2-3 short, focused web search queries" in prompt_text:
@@ -240,11 +281,16 @@ def _mock_for_web_search(request, monkeypatch):
             if "semantic_focus" in prompt_text or "statutory_focus" in prompt_text:
                 return make_decomposed_query()
             return make_query_classification(prompt_text)
+
         return make_runnable_structured(get_structured)
+
     mock_llm.with_structured_output = MagicMock(side_effect=with_structured_output)
 
     # Patch at the model module level since web_search imports from there
-    monkeypatch.setattr('agent.model.ChatModels.get_sarvam_m', lambda: mock_llm)
+    monkeypatch.setattr(
+        'agent.model.ChatModels.get_sarvam_m',
+        lambda: mock_llm
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -253,11 +299,16 @@ def _mock_for_query_decomposer(request, monkeypatch):
         return
 
     mock_llm = make_runnable_llm_direct()
+
     def with_structured_output(schema):
         return make_runnable_structured(lambda _: make_decomposed_query())
+
     mock_llm.with_structured_output = MagicMock(side_effect=with_structured_output)
 
-    monkeypatch.setattr('agent.node.query_decomposer.ChatModels.get_sarvam_m', lambda: mock_llm)
+    monkeypatch.setattr(
+        'agent.node.query_decomposer.ChatModels.get_sarvam_m',
+        lambda: mock_llm
+    )
 
 
 # --- Mock torch for ingestion tests ---

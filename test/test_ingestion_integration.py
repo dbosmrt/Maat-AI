@@ -4,11 +4,12 @@ Integration tests for the ingestion node using real PDFs.
 
 import sys
 import os
+
+# Ensure server module can be imported before other imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../server')))
+
 from pathlib import Path
 import pytest
-
-# Ensure server module can be imported
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../server')))
 
 from agent.node.ingestion import process_pdf_with_fallback
 
