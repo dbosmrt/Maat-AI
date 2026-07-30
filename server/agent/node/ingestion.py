@@ -1,19 +1,16 @@
 """Document Ingestion Node for Legal RAG Chatbot.
 
 This module orchestrates the PDF ingestion process by utilizing functions
-from `ingestion_utils.py` and also supports direct markdown file ingestion.
+from `ingestion_utils.py` and `pdf_parser.py`, and also supports direct
+markdown file ingestion.
 """
 
 from pathlib import Path
 
-from agent.state import AgentState
-from agent.utils.ingestion_utils import (
-    ingest_documents_to_pinecone,
-    process_markdown_files,
-    process_pdf_with_fallback,
-    validate_paths,
-)
-from agent.utils.logger import get_logger
+from ..state import AgentState
+from ..utils.ingestion_service import get_ingestion_service
+from ..utils.pdf_parser import PDFParserService
+from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -38,17 +35,13 @@ def ingestion_node(state: AgentState) -> dict:
     markdown_dir = state.get("ingest_markdown_dir", "")
     if markdown_dir:
         logger.info("Markdown ingestion mode detected. Input: %s", markdown_dir)
-        documents = process_markdown_files(str(markdown_dir))
-
-        if not documents:
-            return {"ingest_status": "Failed: No markdown files found or processed"}
-
-        success = ingest_documents_to_pinecone(documents)
+        service = get_ingestion_service()
+        success = service.run_full_pipeline(markdown_dir)
 
         if success:
-            status = f"Completed: Successfully ingested {len(documents)} chunks into Pinecone."
+            status = "Completed: Successfully ingested markdown files into Pinecone."
         else:
-            status = "Failed: Error during Pinecone ingestion."
+            status = "Failed: Error during markdown ingestion pipeline."
 
         logger.info(status)
         return {"ingest_status": status, "documents": []}
@@ -64,11 +57,9 @@ def ingestion_node(state: AgentState) -> dict:
         )
         return {"ingest_status": "Failed: Missing directories in state"}
 
-    logger.info(
-        "ingestion_node started (PDF mode). Input: %s, Output: %s", input_dir, output_dir
-    )
+    logger.info("ingestion_node started (PDF mode). Input: %s, Output: %s", input_dir, output_dir)
 
-    if not validate_paths(input_dir, output_dir):
+    if not get_ingestion_service().validate_paths(input_dir, output_dir):
         return {"ingest_status": "Failed: Invalid input directory"}
 
     pdf_files = list(Path(input_dir).glob("*.pdf"))
@@ -79,8 +70,10 @@ def ingestion_node(state: AgentState) -> dict:
     logger.info("Found %d PDF(s). Starting ingestion...", len(pdf_files))
     success_count = 0
 
+    parser = PDFParserService()
+
     for pdf_file in pdf_files:
-        if process_pdf_with_fallback(str(pdf_file), output_dir):
+        if parser.process_pdf_with_fallback(str(pdf_file), output_dir):
             success_count += 1
 
     status = (

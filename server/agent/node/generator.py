@@ -3,100 +3,126 @@
 import traceback
 from typing import Union
 
-from agent.model import ChatModels
-from agent.prompt.generator_prompt import get_generator_prompt
-from agent.state import AgentState, GeneratorOutput
-from agent.utils.logger import get_logger, log_node_event, log_system_error
+from ..model import ChatModels
+from ..prompt.generator_prompt import get_generator_prompt
+from ..state import AgentState, GeneratorOutput
+from ..utils.logger import get_logger, log_node_event, log_system_error
+from .base import PromptNode
 
 logger = get_logger(__name__)
 
 
-def generator_node(state: AgentState) -> dict:
-    """
-    Synthesize the final answer using retrieved contexts and memory.
+class GeneratorNode(PromptNode):
+    """Node that synthesizes the final legal response using retrieved contexts."""
 
-    Args:
-        state: Current LangGraph state. Reads `query`, `documents`,
-            `case_laws`, `memory_summary`, and `is_scenario`.
+    def __init__(self) -> None:
+        super().__init__(name="generator")
 
-    Returns:
-        A dict with the new `generation` and `law_domain` fields.
-        On LLM failure, returns a graceful fallback message.
-    """
-    query = state.get("query", "")
-    documents = state.get("documents", [])
-    case_laws = state.get("case_laws", [])
-    memory_summary = state.get("memory_summary", "")
-    is_scenario = state.get("is_scenario", False)
+    def execute(self, state: AgentState) -> dict:
+        """Synthesize the final answer using retrieved contexts and memory.
 
-    logger.info("Generator Node: Formulating final response...")
+        Args:
+            state: Current LangGraph state. Reads `query`, `documents`,
+                `case_laws`, `memory_summary`, and `is_scenario`.
 
-    # Format contexts
-    docs_text = (
-        "\n\n".join(documents)
-        if documents
-        else "No direct internal legal statutes retrieved."
-    )
-    cases_text = (
-        "\n\n".join(case_laws)
-        if case_laws
-        else "No external case laws retrieved."
-    )
-    memory_text = (
-        memory_summary if memory_summary else "No prior conversation history."
-    )
+        Returns:
+            Dictionary with `generation` and `law_domain` fields.
+            On LLM failure, returns a graceful fallback message.
+        """
+        query = state.get("query", "")
+        documents = state.get("documents", [])
+        case_laws = state.get("case_laws", [])
+        memory_summary = state.get("memory_summary", "")
+        is_scenario = state.get("is_scenario", False)
 
-    # Initialize LLM and Parser with structured output
-    llm = ChatModels.get_sarvam_m()
-    structured_llm = llm.with_structured_output(GeneratorOutput)
+        # Get user model settings from state (injected by API route)
+        user_chat_model = state.get("user_chat_model")
+        user_temperature = state.get("user_temperature")
+        user_max_tokens = state.get("user_max_tokens")
+        user_top_p = state.get("user_top_p")
 
-    # Customize instructions based on whether it is a scenario or direct question
-    scenario_instruction = ""
-    if is_scenario:
-        scenario_instruction = (
-            "\n- The user is asking about a specific scenario or event. "
-            "Apply the laws directly to the people/events mentioned in the "
-            "query. Provide actionable legal steps if applicable."
+        logger.info("Generator Node: Formulating final response...")
+
+        # Format contexts
+        docs_text = (
+            "\n\n".join(documents)
+            if documents
+            else "No direct internal legal statutes retrieved."
+        )
+        cases_text = (
+            "\n\n".join(case_laws)
+            if case_laws
+            else "No external case laws retrieved."
+        )
+        memory_text = (
+            memory_summary if memory_summary else "No prior conversation history."
         )
 
-    prompt = get_generator_prompt(scenario_instruction)
+        # Initialize LLM with user settings or defaults
+        llm = ChatModels.get_from_user_settings(
+            preferred_model=user_chat_model,
+            temperature=user_temperature,
+            top_p=user_top_p,
+            max_tokens=user_max_tokens,
+        )
+        structured_llm = llm.with_structured_output(GeneratorOutput)
 
-    chain = prompt | structured_llm
+        # Customize instructions based on whether it is a scenario or direct question
+        scenario_instruction = ""
+        if is_scenario:
+            scenario_instruction = (
+                "\n- The user is asking about a specific scenario or event. "
+                "Apply the laws directly to the people/events mentioned in the "
+                "query. Provide actionable legal steps if applicable."
+            )
 
-    try:
-        result: Union[dict, GeneratorOutput] = chain.invoke(
-            {
-                "query": query,
-                "memory_text": memory_text,
-                "docs_text": docs_text,
-                "cases_text": cases_text,
+        prompt = get_generator_prompt(scenario_instruction)
+
+        chain = prompt | structured_llm
+
+        try:
+            result: Union[dict, GeneratorOutput] = chain.invoke(
+                {
+                    "query": query,
+                    "memory_text": memory_text,
+                    "docs_text": docs_text,
+                    "cases_text": cases_text,
+                }
+            )
+
+            logger.info("Generator Node: Response successfully generated.")
+            log_node_event("generator_node", "SUCCESS")
+
+            # Type guard: result could be dict or GeneratorOutput depending on LLM implementation
+            if isinstance(result, dict):
+                generation = result.get("generation", "")
+                law_domain = result.get("law_domain", "General")
+            else:
+                generation = result.generation
+                law_domain = result.law_domain
+
+            return {
+                "generation": generation,
+                "law_domain": law_domain,
             }
-        )
 
-        logger.info("Generator Node: Response successfully generated.")
-        log_node_event("generator_node", "SUCCESS")
+        except (RuntimeError, ValueError, ConnectionError) as exc:
+            logger.error("Generator node failed: %s", exc)
+            log_system_error(traceback.format_exc())
+            log_node_event("generator_node", "FAILURE", error_payload=str(exc))
+            return {
+                "generation": (
+                    "I apologize, but I encountered an internal error while "
+                    "generating your legal response. Please try again."
+                ),
+                "law_domain": "General",
+            }
 
-        # Type guard: result could be dict or GeneratorOutput depending on LLM implementation
-        if isinstance(result, dict):
-            generation = result.get("generation", "")
-            law_domain = result.get("law_domain", "General")
-        else:
-            generation = result.generation
-            law_domain = result.law_domain
 
-        return {
-            "generation": generation,
-            "law_domain": law_domain,
-        }
+# Singleton instance for backward compatibility
+_generator_node = GeneratorNode()
 
-    except (RuntimeError, ValueError, ConnectionError) as exc:
-        logger.error("Generator node failed: %s", exc)
-        log_system_error(traceback.format_exc())
-        log_node_event("generator_node", "FAILURE", error_payload=str(exc))
-        return {
-            "generation": (
-                "I apologize, but I encountered an internal error while "
-                "generating your legal response. Please try again."
-            ),
-            "law_domain": "General",
-        }
+
+def generator_node(state: AgentState) -> dict:
+    """Backward-compatible function wrapper."""
+    return _generator_node(state)

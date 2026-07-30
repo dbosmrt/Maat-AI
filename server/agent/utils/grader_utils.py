@@ -1,8 +1,9 @@
-"""
-Utility functions for the Grader node in the Legal RAG Chatbot.
-"""
+"""Utility functions for the Grader node in the Legal RAG Chatbot."""
 
-def calculate_max_retries(decomposed_query: dict) -> int:
+from typing import Dict
+
+
+def calculate_max_retries(decomposed_query: Dict) -> int:
     """
     Calculate the dynamic maximum number of retrieval retries based on query complexity.
 

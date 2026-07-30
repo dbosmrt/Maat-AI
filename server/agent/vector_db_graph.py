@@ -8,12 +8,12 @@ Workflow:
 
 from langgraph.graph import END, START, StateGraph
 
-from agent.node.chunking import chunking_node
-from agent.node.cleaning import cleaning_node
-from agent.node.embedding import embedding_node
-from agent.node.ingestion import ingestion_node
-from agent.state import AgentState
-from agent.utils.logger import get_logger
+from .node.chunking import chunking_node
+from .node.cleaning import cleaning_node
+from .node.embedding import embedding_node
+from .node.ingestion import ingestion_node
+from .state import AgentState
+from .utils.logger import get_logger
 
 logger = get_logger(__name__)
 
