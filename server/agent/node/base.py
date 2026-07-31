@@ -229,3 +229,4 @@ class PromptNode(LLMNode):
     def _get_prompt_template(self):
         """Get the prompt template. Override in subclasses."""
         raise NotImplementedError("Subclass must implement _get_prompt_template()")
+

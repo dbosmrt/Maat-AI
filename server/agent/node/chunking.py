@@ -5,9 +5,9 @@ This module provides a LangGraph node that chunks large Markdown files.
 
 from pathlib import Path
 
-from agent.state import AgentState
-from agent.utils.chunking_utils import chunk_markdown_file
-from agent.utils.logger import get_logger
+from ..state import AgentState
+from ..utils.chunking_utils import chunk_markdown_file
+from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -52,3 +52,4 @@ def chunking_node(state: AgentState) -> dict:
         "documents": all_chunks,
         "ingest_status": "Chunking Completed",
     }
+

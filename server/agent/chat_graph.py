@@ -105,8 +105,8 @@ def build_chat_graph() -> StateGraph:
     return workflow.compile()
 
 
-# Global compiled graph instance (lazy initialization)
-_compiled_graph = None
+# Module-level singleton (module globals are acceptable for singleton patterns)
+_COMPILED_GRAPH = None
 
 
 def get_chat_graph() -> StateGraph:
@@ -115,7 +115,7 @@ def get_chat_graph() -> StateGraph:
     Returns:
         Compiled StateGraph instance.
     """
-    global _compiled_graph
-    if _compiled_graph is None:
-        _compiled_graph = build_chat_graph()
-    return _compiled_graph
+    global _COMPILED_GRAPH
+    if _COMPILED_GRAPH is None:
+        _COMPILED_GRAPH = build_chat_graph()
+    return _COMPILED_GRAPH

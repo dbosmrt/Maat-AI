@@ -82,3 +82,4 @@ def ingestion_node(state: AgentState) -> dict:
     )
     logger.info(status)
     return {"ingest_status": status}
+

@@ -38,8 +38,6 @@ class MaatError(Exception):
 class ConfigurationError(MaatError):
     """Raised when configuration is invalid or missing."""
 
-    pass
-
 
 class LLMError(MaatError):
     """Raised when LLM API calls fail."""
@@ -62,8 +60,6 @@ class LLMError(MaatError):
 
 class LLMTimeoutError(LLMError):
     """Raised when LLM request times out."""
-
-    pass
 
 
 class LLMRateLimitError(LLMError):
@@ -117,8 +113,6 @@ class VectorStoreError(MaatError):
 
 class VectorStoreConnectionError(VectorStoreError):
     """Raised when vector store connection fails."""
-
-    pass
 
 
 class VectorStoreDimensionMismatchError(VectorStoreError):
@@ -222,8 +216,6 @@ class PDFParseError(IngestionError):
 
 class ChunkingError(IngestionError):
     """Raised when document chunking fails."""
-
-    pass
 
 
 class EmbeddingError(IngestionError):

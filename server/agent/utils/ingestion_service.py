@@ -10,7 +10,6 @@ from ..utils.embedding_utils import VectorDatabaseService
 from ..utils.pdf_parser import PDFParserService
 from ..utils.chunking_utils import MarkdownChunker
 from ..utils.cleaning_utils import MarkdownCleaner
-from ..node.retriever import invalidate_bm25_cache
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -208,6 +207,7 @@ class DocumentIngestionService:
             logger.info("Successfully embedded and stored all %d documents.", len(documents))
 
             # Invalidate the BM25 cache so next retrieval rebuilds it
+            from ..node.retriever import invalidate_bm25_cache
             invalidate_bm25_cache()
 
             return True
@@ -229,7 +229,11 @@ class DocumentIngestionService:
         logger.info("Starting Markdown Ingestion Pipeline")
         logger.info("=" * 60)
         logger.info("Markdown directory: %s", markdown_dir)
-        logger.info("Pinecone index: %s", self._vector_databases.get_pinecone_index_name())
+        logger.info("Pinecone index: %s", self.get_pinecone_index_name())
+
+    def get_pinecone_index_name(self) -> str:
+        """Get the Pinecone index name from the vector database service."""
+        return self._vector_database_service.get_pinecone_index_name()
 
         # Step 1: Load and chunk markdown files
         logger.info("Step 1: Loading and chunking markdown files...")

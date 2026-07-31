@@ -6,9 +6,9 @@ produced by the ingestion step.
 
 from pathlib import Path
 
-from agent.state import AgentState
-from agent.utils.cleaning_utils import clean_markdown_text
-from agent.utils.logger import get_logger
+from ..state import AgentState
+from ..utils.cleaning_utils import clean_markdown_text
+from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -57,3 +57,4 @@ def cleaning_node(state: AgentState) -> dict:
             logger.error("Failed to clean file %s: %s", md_file.name, exc)
 
     return {"ingest_status": "Cleaning Completed Successfully"}
+

@@ -90,3 +90,4 @@ _reranker_node = RerankerNode()
 def reranker_node(state: AgentState) -> dict:
     """Backward-compatible function wrapper."""
     return _reranker_node(state)
+

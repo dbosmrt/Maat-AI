@@ -191,7 +191,7 @@ class RetrieverNode(BaseNode):
         Returns:
             List of LangChain Document objects.
         """
-        raw_index = VectorDatabases.get_raw_index()
+        raw_index = get_vector_database_service().get_raw_index()
 
         docs: List[Document] = []
 
@@ -284,9 +284,9 @@ class RetrieverNode(BaseNode):
         even when total vector count remains the same (e.g., document updates).
         """
         try:
-            raw_index = VectorDatabases.get_raw_index()
+            raw_index = get_vector_database_service().get_raw_index()
             stats = raw_index.describe_index_stats()
-            index_name = VectorDatabases.get_pinecone_index_name()
+            index_name = get_vector_database_service().get_pinecone_index_name()
             total_vectors = stats.get("total_vector_count", 0)
 
             # Include namespace-level counts to catch updates within same total count
@@ -367,3 +367,4 @@ def invalidate_bm25_cache() -> None:
     except OSError:
         pass
     logger.info("BM25 cache invalidated (memory and disk). Will rebuild on next retrieval.")
+

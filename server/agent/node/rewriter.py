@@ -71,3 +71,4 @@ _rewriter_node = RewriterNode()
 def rewriter_node(state: AgentState) -> dict:
     """Backward-compatible function wrapper."""
     return _rewriter_node(state)
+

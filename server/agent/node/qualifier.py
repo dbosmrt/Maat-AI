@@ -74,3 +74,4 @@ _qualifier_node = QualifierNode()
 def qualifier_node(state: AgentState) -> dict:
     """Backward-compatible function wrapper."""
     return _qualifier_node(state)
+

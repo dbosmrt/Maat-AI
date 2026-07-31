@@ -11,10 +11,10 @@ from typing import Any, List, Union, TYPE_CHECKING, cast
 
 from langchain_core.documents import Document
 
-from agent.state import AgentState
-from agent.utils.logger import get_logger
-from agent.utils.embedding_utils import VectorDatabases
-from agent.node.retriever import invalidate_bm25_cache
+from ..state import AgentState
+from ..utils.logger import get_logger
+from ..utils.embedding_utils import VectorDatabaseService
+from ..node.retriever import invalidate_bm25_cache
 
 logger = get_logger(__name__)
 
@@ -40,7 +40,7 @@ def embedding_node(state: AgentState) -> dict:
     logger.info("Initializing Pinecone vector store...")
 
     try:
-        vectorstore = VectorDatabases.get_vector_store()
+        vectorstore = VectorDatabaseService().get_vector_store()
 
         logger.info("Adding %d documents to the vector store...", len(documents))
 
@@ -85,3 +85,4 @@ def embedding_node(state: AgentState) -> dict:
     except (RuntimeError, ConnectionError, ValueError) as exc:
         logger.error("Failed to embed and store documents: %s", exc)
         return {"ingest_status": f"Embedding Failed: {exc}"}
+

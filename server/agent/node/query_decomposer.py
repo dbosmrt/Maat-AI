@@ -86,3 +86,4 @@ _query_decomposer_node = QueryDecomposerNode()
 def query_decomposer_node(state: AgentState) -> dict:
     """Backward-compatible function wrapper."""
     return _query_decomposer_node(state)
+
