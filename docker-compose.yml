@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+
+  # MongoDB Database
+
+  mongodb:
+    image: mongo:7
+    container_name: maat-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: maat_ai
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # Redis (for rate limiting, sessions, caching)
+
+  redis:
+    image: redis:7-alpine
+    container_name: maat-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # API Gateway (FastAPI Application)
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: maat-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=maat_ai
+      - REDIS_URI=redis://redis:6379
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - NVIDIA_NIM_KEY=${NVIDIA_NIM_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX=${PINECONE_INDEX:-legal-rag}
+      - PINECONE_CLOUD=${PINECONE_CLOUD:-aws}
+      - PINECONE_REGION=${PINECONE_REGION:-us-east-1}
+      - PINECONE_DIM=${PINECONE_DIM:-1024}
+      - PINECONE_METRIC=${PINECONE_METRIC:-cosine}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=console
+      # Model config (optional - can be overridden per-user)
+      - CHAT_MODEL_NEMOTRON3SUPER=${CHAT_MODEL_NEMOTRON3SUPER:-nvidia/llama-3.3-nemotron-super-49b-v1}
+      - CHAT_MODEL_GLM5_2=${CHAT_MODEL_GLM5_2:-z-ai/glm-5.2}
+      - CHAT_MODEL_SARVAM_M=${CHAT_MODEL_SARVAM_M:-sarvamai/sarvam-m}
+      - CHAT_MODEL_MINIMAX_M3=${CHAT_MODEL_MINIMAX_M3:-minimaxai/minimax-m3}
+      - CHAT_TEMPERATURE=${CHAT_TEMPERATURE:-0.6}
+      - CHAT_TOP_P=${CHAT_TOP_P:-0.95}
+      - CHAT_MAX_TOKENS=${CHAT_MAX_TOKENS:-8192}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./server:/app/server:ro  # Read-only code mount for dev
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+
+  # Nginx Reverse Proxy with SSL Termination
+
+  nginx:
+    image: nginx:alpine
+    container_name: maat-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - api
+    profiles:
+      - production
+
+
+  # Frontend Development Server (Vite)
+
+  frontend:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: maat-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    volumes:
+      - ./app:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0
+    profiles:
+      - dev
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  default:
+    name: maat-network
