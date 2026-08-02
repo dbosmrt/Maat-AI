@@ -52,4 +52,3 @@ def chunking_node(state: AgentState) -> dict:
         "documents": all_chunks,
         "ingest_status": "Chunking Completed",
     }
-

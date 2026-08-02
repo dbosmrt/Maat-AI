@@ -367,4 +367,3 @@ def invalidate_bm25_cache() -> None:
     except OSError:
         pass
     logger.info("BM25 cache invalidated (memory and disk). Will rebuild on next retrieval.")
-

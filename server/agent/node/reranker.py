@@ -1,5 +1,6 @@
 """Reranker node: filters retrieved documents for relevance."""
 
+import traceback
 from ..utils.logger import get_logger, log_node_event, log_system_error
 from ..state import AgentState, DocumentRanking
 from ..model import ChatModels
@@ -90,4 +91,3 @@ _reranker_node = RerankerNode()
 def reranker_node(state: AgentState) -> dict:
     """Backward-compatible function wrapper."""
     return _reranker_node(state)
-

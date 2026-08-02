@@ -195,4 +195,3 @@ _grader_node = GraderNode()
 def grader_node(state: AgentState) -> dict:
     """Backward-compatible function wrapper."""
     return _grader_node(state)
-

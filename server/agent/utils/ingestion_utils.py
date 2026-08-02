@@ -7,7 +7,7 @@ from typing import List
 from langchain_core.documents import Document
 
 from agent.utils.chunking_utils import chunk_markdown_file
-from agent.utils.embedding_utils import VectorDatabases
+from agent.utils.embedding_utils import VectorDatabaseService
 from agent.utils.logger import get_logger
 from agent.node.retriever import invalidate_bm25_cache
 
@@ -19,7 +19,7 @@ class DocumentIngestionService:
 
     def __init__(
         self,
-        vector_databases: VectorDatabases | None = None,
+        vector_databases: VectorDatabaseService | None = None,
         batch_size: int = 16,
         max_retries: int = 3,
         retry_delay: int = 10,
@@ -34,7 +34,7 @@ class DocumentIngestionService:
             retry_delay: Delay in seconds between retries.
             rate_limit_sleep: Delay between batches to respect rate limits.
         """
-        self._vector_databases = vector_databases or VectorDatabases()
+        self._vector_databases = vector_databases or VectorDatabaseService()
         self._batch_size = batch_size
         self._max_retries = max_retries
         self._retry_delay = retry_delay

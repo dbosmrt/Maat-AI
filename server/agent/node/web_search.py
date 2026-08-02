@@ -155,4 +155,3 @@ _web_search_node = WebSearchNode()
 def web_search_node(state: AgentState) -> dict:
     """Backward-compatible function wrapper."""
     return _web_search_node(state)
-

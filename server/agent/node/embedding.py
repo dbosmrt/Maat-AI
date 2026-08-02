@@ -85,4 +85,3 @@ def embedding_node(state: AgentState) -> dict:
     except (RuntimeError, ConnectionError, ValueError) as exc:
         logger.error("Failed to embed and store documents: %s", exc)
         return {"ingest_status": f"Embedding Failed: {exc}"}
-

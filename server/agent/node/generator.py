@@ -126,4 +126,3 @@ _generator_node = GeneratorNode()
 def generator_node(state: AgentState) -> dict:
     """Backward-compatible function wrapper."""
     return _generator_node(state)
-

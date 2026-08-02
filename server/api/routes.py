@@ -1,9 +1,15 @@
+"""Legacy chat routes for Ma'at Legal AI.
+
+Provides backward-compatible endpoints for the chat flow.
+This will be used by the frontend until migrated to the new /api/v1/chats endpoints.
+"""
+
 import os
-import json
-import uuid
 import time
-from typing import List, Tuple, Any
-from fastapi import APIRouter, HTTPException, Depends
+import uuid
+from typing import List, Optional, Any
+
+from fastapi import APIRouter, HTTPException, Depends, status
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langchain_core.messages.utils import get_buffer_string
 
@@ -13,11 +19,14 @@ try:
 except ImportError:
     _HAS_TIKTOKEN = False
 
-from api.models import ChatRequest, ChatResponse, StartSessionResponse, ChatHistoryResponse, SessionItem, SessionListResponse
-from api.security import get_api_key
-from agent.chat_graph import build_chat_graph
-from agent.state import AgentState
-from agent.utils.logger import get_logger
+from server.api.models import ChatRequest, ChatResponse, StartSessionResponse, ChatHistoryResponse, SessionItem, SessionListResponse
+from server.agent.chat_graph import get_chat_graph
+from server.agent.state import AgentState
+from server.agent.utils.logger import get_logger
+from server.db.connection import get_database
+from server.db.models import User, PydanticObjectId, ChatMessageCreate, MessageRole
+from server.chat.service import ChatService
+from server.auth.dependencies import get_current_active_user
 
 logger = get_logger(__name__)
 
@@ -27,10 +36,7 @@ _ENCODING = "cl100k_base"  # GPT-4 / cl100k_base encoding
 
 
 def _count_tokens(messages: List[BaseMessage]) -> int:
-    """
-    Count tokens in a list of messages using tiktoken if available,
-    otherwise estimate from character count.
-    """
+    """Count tokens in a list of messages using tiktoken if available, else estimate."""
     if _HAS_TIKTOKEN:
         try:
             encoding = tiktoken.get_encoding(_ENCODING)
@@ -47,10 +53,7 @@ def _truncate_history_to_token_limit(
     messages: List[BaseMessage],
     max_tokens: int = _MAX_HISTORY_TOKENS
 ) -> List[BaseMessage]:
-    """
-    Truncate message history to fit within token limit.
-    Keeps most recent messages first (sliding window from end).
-    """
+    """Truncate message history to fit within token limit (sliding window from end)."""
     if not messages:
         return []
 
@@ -58,7 +61,7 @@ def _truncate_history_to_token_limit(
     if count <= max_tokens:
         return messages
 
-    # Sliding window from the end - keep most recent messages
+    # Sliding window: keep most recent messages
     for i in range(1, len(messages) + 1):
         trimmed = messages[-i:]
         if _count_tokens(trimmed) <= max_tokens:
@@ -71,188 +74,111 @@ def _truncate_history_to_token_limit(
     )
     return [messages[-1]]
 
+
+chat_service = ChatService()
+
 router = APIRouter()
 
-# Lazy graph instance - compiled on first use
-_chat_graph_holder = {"instance": None}
-
-
-def get_chat_graph():
-    """Get or create the compiled chat graph (lazy initialization)."""
-    if _chat_graph_holder["instance"] is None:
-        _chat_graph_holder["instance"] = build_chat_graph()
-    return _chat_graph_holder["instance"]
-
-CHAT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "chats"))
-os.makedirs(CHAT_DIR, exist_ok=True)
-
-def _load_session_file(session_id: str) -> dict | None:
-    filepath = os.path.join(CHAT_DIR, f"{session_id}.json")
-    if not os.path.exists(filepath):
-        return None
-    with open(filepath, 'r') as f:
-        return json.load(f)
-
-def _save_session_file(session_id: str, memory_summary: str, history: List[dict]):
-    filepath = os.path.join(CHAT_DIR, f"{session_id}.json")
-    data = {
-        "session_id": session_id,
-        "memory_summary": memory_summary,
-        "history": history
-    }
-    with open(filepath, 'w') as f:
-        json.dump(data, f, indent=4)
 
 @router.get("/health")
 def health_check():
     """Basic health check endpoint."""
-    return {"status": "ok", "message": "Ma-at Legal AI API is running"}
+    return {"status": "ok", "message": "Ma'at Legal AI API is running"}
+
 
 @router.post("/api/v1/chat/start", response_model=StartSessionResponse)
-def start_chat(api_key: str = Depends(get_api_key)):
-    """Initializes a new chat session."""
+def start_chat(current_user: User = Depends(get_current_active_user)):
+    """Initializes a new chat session (legacy endpoint - use /api/v1/chats)."""
     session_id = str(uuid.uuid4())[:8]
-    _save_session_file(session_id, "", [])
-    logger.info(f"New chat session created: {session_id}")
-    return StartSessionResponse(session_id=session_id, message="Session started successfully.")
-
-@router.get("/api/v1/chat/sessions", response_model=SessionListResponse)
-def list_sessions(api_key: str = Depends(get_api_key)):
-    """Lists all available chat sessions with a preview of the first user message."""
-    sessions = []
-    for filename in os.listdir(CHAT_DIR):
-        if not filename.endswith(".json"):
-            continue
-        session_id = filename.replace(".json", "")
-        data = _load_session_file(session_id)
-        if data is None:
-            continue
-        history = data.get("history", [])
-        preview = "New conversation"
-        for msg in history:
-            if msg.get("type") == "human":
-                preview = msg["content"][:80]
-                break
-        sessions.append(SessionItem(
-            session_id=session_id,
-            preview=preview,
-            message_count=len(history)
-        ))
-    return SessionListResponse(sessions=sessions)
-
-@router.delete("/api/v1/chat/{session_id}")
-def delete_session(session_id: str, api_key: str = Depends(get_api_key)):
-    """Deletes a chat session file."""
-    filepath = os.path.join(CHAT_DIR, f"{session_id}.json")
-    if not os.path.exists(filepath):
-        logger.warning(f"Attempted to delete non-existent session: {session_id}")
-        raise HTTPException(status_code=404, detail="Session not found")
-    os.remove(filepath)
-    logger.info(f"Chat session deleted: {session_id}")
-    return {"status": "ok", "message": f"Session {session_id} deleted."}
-
-@router.get("/api/v1/chat/{session_id}", response_model=ChatHistoryResponse)
-def get_chat_history(session_id: str, api_key: str = Depends(get_api_key)):
-    """Retrieves the message history for a given session."""
-    data = _load_session_file(session_id)
-    if not data:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return ChatHistoryResponse(
+    logger.info(f"New chat session created: {session_id} for user {current_user.id}")
+    return StartSessionResponse(
         session_id=session_id,
-        history=data.get("history", [])
+        message="Session started successfully. Use /api/v1/chats for new session management."
     )
 
+
+@router.get("/api/v1/chat/sessions", response_model=SessionListResponse)
+def list_sessions(current_user: User = Depends(get_current_active_user)):
+    """Lists all available chat sessions (legacy endpoint - use /api/v1/chats)."""
+    # Note: This is legacy; sessions are now in MongoDB
+    # Return empty for now - frontend should use /api/v1/chats
+    return SessionListResponse(sessions=[])
+
+
+@router.delete("/api/v1/chat/{session_id}")
+def delete_session(session_id: str, current_user: User = Depends(get_current_active_user)):
+    """Deletes a chat session (legacy endpoint)."""
+    logger.warning(f"Legacy delete session called: {session_id}")
+    raise HTTPException(status_code=410, detail="Use /api/v1/chats/{session_id} for session management")
+
+
+@router.get("/api/v1/chat/{session_id}", response_model=ChatHistoryResponse)
+async def get_chat_history(session_id: str, current_user: User = Depends(get_current_active_user)):
+    """Retrieves the message history for a given session (legacy endpoint)."""
+    try:
+        user_id = PydanticObjectId(current_user.id)
+        messages = await chat_service.get_history(session_id, user_id)
+        history = [{"type": msg.role.value, "content": msg.content} for msg in messages]
+        return ChatHistoryResponse(session_id=session_id, history=history)
+    except Exception as e:
+        logger.error(f"Error retrieving chat history: {e}")
+        raise HTTPException(status_code=404, detail="Session not found")
+
+
 @router.post("/api/v1/chat/{session_id}", response_model=ChatResponse)
-def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(get_api_key)):
-    """Core RAG inference endpoint. Use 'new' as the session_id to automatically generate a new chat session."""
+async def invoke_chat(
+    session_id: str,
+    request: ChatRequest,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Core RAG inference endpoint (legacy - use /api/v1/chats for full features)."""
     start_time = time.perf_counter()
 
     if session_id.lower() == "new":
         session_id = str(uuid.uuid4())[:8]
-        # Initialize an empty session file
-        _save_session_file(session_id, "", [])
-        data: dict | None = {"session_id": session_id, "memory_summary": "", "history": []}
-        logger.info(f"Auto-created new session: {session_id}")
+        logger.info(f"Auto-created new session: {session_id} for user {current_user.id}")
     else:
-        data = _load_session_file(session_id)
-        if not data:
-            logger.warning(f"Chat invoked on non-existent session: {session_id}")
-            raise HTTPException(status_code=404, detail="Session not found. Provide a valid session ID or use 'new'.")
+        logger.info(f"Chat invoked on session {session_id}: '{request.query[:80]}...'")
 
-    if data is None:
-        raise HTTPException(status_code=500, detail="Failed to load session data")
+    # Get chat history from MongoDB
+    user_id = PydanticObjectId(current_user.id)
 
-    logger.info(f"Chat invoked on session {session_id}: '{request.query[:80]}...'")
+    try:
+        history = await chat_service.get_history(session_id, user_id)
+    except Exception:
+        history = []
 
-    memory_summary = str(data.get("memory_summary", ""))
-    raw_history_any = data.get("history", [])
-    raw_history: List[dict] = raw_history_any if isinstance(raw_history_any, list) else []
-
-    # Rebuild LangChain message objects
+    # Convert to LangChain messages
     lc_history: List[Any] = []
-    for msg in raw_history:
-        if msg["type"] == "human":
-            lc_history.append(HumanMessage(content=msg["content"]))
-        elif msg["type"] == "ai":
-            lc_history.append(AIMessage(content=msg["content"]))
+    for msg in history:
+        if msg.role.value == "human":
+            lc_history.append(HumanMessage(content=msg.content))
+        elif msg.role.value == "ai":
+            lc_history.append(AIMessage(content=msg.content))
 
     # Append the new user query
     lc_history.append(HumanMessage(content=request.query))
 
-    # Token-aware history truncation
-    # Use tiktoken to count tokens and keep history within budget
+    # Token-aware truncation
     max_history_tokens = int(os.environ.get("MAX_HISTORY_TOKENS", "4000"))
+    lc_history = _truncate_history_to_token_limit(lc_history, max_history_tokens)
 
-    def _count_message_tokens(messages: List[Any]) -> int:
-        """Count tokens in a list of messages using tiktoken."""
-        try:
-            import tiktoken as tiktoken_module
-
-            # Use cl100k_base which is compatible with most modern models
-            encoding = tiktoken_module.get_encoding("cl100k_base")
-            total = 0
-            for msg in messages:
-                # Count tokens in message content
-                total += len(encoding.encode(msg.content))
-                # Add overhead for message role (roughly 4 tokens per message)
-                total += 4
-            return total
-        except ImportError:
-            # Fallback: rough estimate (1 token ≈ 4 chars)
-            return sum(len(getattr(m, "content", "")) for m in messages) // 4
-
-    def _truncate_history_by_tokens(messages: List[Any], max_tokens: int) -> List[Any]:
-        """Truncate messages from the start to fit within token budget."""
-        if not messages:
-            return []
-
-        # Count total tokens
-        total_tokens = _count_message_tokens(messages)
-
-        if total_tokens <= max_tokens:
-            return messages
-
-        # Remove oldest messages until we fit
-        while messages and total_tokens > max_tokens:
-            messages.pop(0)
-            # Recalculate (could be optimized by subtracting, but this is safer)
-            total_tokens = _count_message_tokens(messages)
-
-        logger.debug(
-            f"Truncated history from {len(messages) + (total_tokens - max_tokens) // 4} "
-            f"to {len(messages)} messages ({total_tokens} tokens, budget {max_tokens})"
-        )
-        return messages
-
-    # Get token-limited history
-    lc_history = _truncate_history_by_tokens(lc_history, max_history_tokens)
+    # Get user's preferred model settings
+    user_settings = current_user.settings
+    model_config = {}
+    if user_settings:
+        model_config = {
+            "user_chat_model": user_settings.preferred_chat_model,
+            "user_temperature": user_settings.temperature,
+            "user_top_p": user_settings.top_p,
+            "user_max_tokens": user_settings.max_tokens,
+        }
 
     # Build the initial state for the graph
     state: AgentState = {
         "session_id": session_id,
         "chat_history": lc_history,
-        "memory_summary": memory_summary,
+        "memory_summary": "",  # Could be loaded from session
         "query": request.query,
         "decomposed_query": {},
         "law_domain": "General",
@@ -268,11 +194,15 @@ def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(ge
         "ingest_input_dir": "",
         "ingest_output_dir": "",
         "ingest_status": "",
+        **model_config  # Flatten user settings into state
     }
 
-    # Invoke Graph
+    # Use pre-compiled graph (singleton)
+    graph = get_chat_graph()
+
+    # Invoke Graph with user settings
     try:
-        result = get_chat_graph().invoke(state)
+        result = graph.invoke(state)
     except Exception as e:
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         logger.error(f"Pipeline failed after {elapsed_ms:.0f}ms for session {session_id}: {e}")
@@ -281,12 +211,22 @@ def invoke_chat(session_id: str, request: ChatRequest, api_key: str = Depends(ge
     generation = result.get("generation", "Failed to generate response.")
     domain = result.get("law_domain", "General")
 
-    # Save the new history
-    raw_history.append({"type": "human", "content": request.query})
-    raw_history.append({"type": "ai", "content": generation})
+    # Save the new history to MongoDB
+    # Save user message
+    await chat_service.add_message(
+        session_id, user_id,
+        ChatMessageCreate(role=MessageRole.HUMAN, content=request.query)
+    )
 
-    # In a real system, the memory summary would be updated here.
-    _save_session_file(session_id, memory_summary, raw_history)
+    # Save AI response
+    await chat_service.add_message(
+        session_id, user_id,
+        ChatMessageCreate(
+            role=MessageRole.AI,
+            content=generation,
+            law_domain=domain
+        )
+    )
 
     elapsed_ms = (time.perf_counter() - start_time) * 1000
     logger.info(f"Chat completed for session {session_id} in {elapsed_ms:.0f}ms | domain={domain}")

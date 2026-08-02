@@ -231,10 +231,6 @@ class DocumentIngestionService:
         logger.info("Markdown directory: %s", markdown_dir)
         logger.info("Pinecone index: %s", self.get_pinecone_index_name())
 
-    def get_pinecone_index_name(self) -> str:
-        """Get the Pinecone index name from the vector database service."""
-        return self._vector_database_service.get_pinecone_index_name()
-
         # Step 1: Load and chunk markdown files
         logger.info("Step 1: Loading and chunking markdown files...")
         documents = self.chunk_markdown_directory(markdown_dir)
@@ -257,6 +253,10 @@ class DocumentIngestionService:
             logger.error("=" * 60)
 
         return success
+
+    def get_pinecone_index_name(self) -> str:
+        """Get the Pinecone index name from the vector database service."""
+        return self._vector_database_service.get_pinecone_index_name()
 
 
 # Backward compatible functions

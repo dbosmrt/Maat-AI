@@ -57,4 +57,3 @@ def cleaning_node(state: AgentState) -> dict:
             logger.error("Failed to clean file %s: %s", md_file.name, exc)
 
     return {"ingest_status": "Cleaning Completed Successfully"}
-
