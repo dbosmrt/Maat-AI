@@ -35,7 +35,7 @@ def test_chunk_and_embed_pipeline():
         state["documents"] = chunks
 
         # 2. Mock Vector Database and execute Embedding Node
-        with patch('agent.node.embedding.VectorDatabases.get_vector_store') as mock_get_vs:
+        with patch('agent.node.embedding.VectorDatabaseService.get_vector_store') as mock_get_vs:
             mock_vs = MagicMock()
             mock_get_vs.return_value = mock_vs
 

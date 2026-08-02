@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 from pathlib import Path
 import pytest
 
-from agent.node.ingestion import process_pdf_with_fallback
+from agent.utils.pdf_parser import process_pdf_with_fallback
 
 BASE_DIR = Path(__file__).parent.parent
 RAW_DATA_DIR = BASE_DIR / "data"

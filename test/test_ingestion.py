@@ -13,7 +13,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from agent.node.ingestion import ingestion_node
-from agent.utils.ingestion_utils import process_pdf_with_fallback
+from agent.utils.pdf_parser import process_pdf_with_fallback
 
 @pytest.fixture
 def mock_state():

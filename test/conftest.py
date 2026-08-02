@@ -142,7 +142,7 @@ def mock_embeddings(monkeypatch):
     mock_emb.embed_query.return_value = [0.1] * 1024
 
     monkeypatch.setattr('agent.model.EmbeddingModels.get_nemotron_embed', lambda: mock_emb)
-    monkeypatch.setattr('agent.model.EmbeddingModels.get_embed_with_fallback', lambda: mock_emb)
+    monkeypatch.setattr('agent.model.EmbeddingModels.get_model_with_fallback', lambda: mock_emb)
 
 
 @pytest.fixture(autouse=True)
@@ -154,8 +154,7 @@ def mock_vector_store(monkeypatch):
         Document(page_content="Mock Document Content", metadata={"context_path": "mock.pdf"})
     ]
     mock_vs.as_retriever.return_value = mock_retriever
-    monkeypatch.setattr('agent.utils.embedding_utils.VectorDatabases.get_vector_store', lambda *a, **k: mock_vs)
-    monkeypatch.setattr('agent.node.retriever._get_bm25_retriever', lambda *a, **k: mock_retriever)
+    monkeypatch.setattr('agent.utils.embedding_utils.VectorDatabaseService.get_vector_store', lambda *a, **k: mock_vs)
 
 
 @pytest.fixture(autouse=True)
