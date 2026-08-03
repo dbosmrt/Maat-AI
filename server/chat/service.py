@@ -136,7 +136,7 @@ class ChatService:
         total = await ChatSession.find(query).count()
 
         # Get paginated sessions
-        sessions = await ChatSession.find(query).sort(-ChatSession.updated_at).skip(skip).limit(page_size).to_list()
+        sessions = await ChatSession.find(query).sort("-updated_at").skip(skip).limit(page_size).to_list()
 
         items = [self._session_to_response(s) for s in sessions]
 
