@@ -4,7 +4,6 @@ Authentication security utilities for Ma'at Legal AI.
 Provides password hashing, JWT token creation/validation, and token utilities.
 """
 
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -12,7 +11,6 @@ from jose import jwt
 from passlib.context import CryptContext
 
 from server.common.config import settings
-from server.common.exceptions import AuthenticationError
 from server.common.logging import get_logger
 
 logger = get_logger(__name__)

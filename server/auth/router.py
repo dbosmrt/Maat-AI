@@ -5,8 +5,7 @@ Provides endpoints for user registration, login, token refresh, password managem
 and user profile management.
 """
 
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, EmailStr, Field
@@ -20,9 +19,7 @@ from server.auth.models import (
     UserResponse,
 )
 from server.auth.security import (
-    create_access_token,
     create_password_reset_token,
-    create_refresh_token,
     create_token_pair,
     decode_token,
     hash_password,

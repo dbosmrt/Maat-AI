@@ -6,7 +6,7 @@ Provides dependency injection for current user, authentication, and authorizatio
 
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from server.auth.security import (
