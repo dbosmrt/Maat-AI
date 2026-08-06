@@ -43,7 +43,11 @@ disable=
     line-too-long,
     unused-import,
     # Test files need to add sys.path before importing from server
-    wrong-import-position
+    wrong-import-position,
+    # Module-level globals for database connection singleton (Motor/Beanie pattern)
+    global-statement,
+    # Beanie Document + Pydantic BaseModel inheritance chain (unavoidable)
+    too-many-ancestors
 
 max-line-length=120
 ignore-paths=
