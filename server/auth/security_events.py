@@ -78,14 +78,26 @@ class SecurityEvent:
     """Security event data structure."""
     event_type: SecurityEventType
     user_id: Optional[str] = None
-    email: Optional[str] = None
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
     severity: SecurityEventSeverity = SecurityEventSeverity.INFO
     message: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    correlation_id: Optional[str] = None
+
+    @property
+    def timestamp(self) -> datetime:
+        """Get event timestamp (auto-generated)."""
+        return datetime.now(timezone.utc)
+
+    @property
+    def correlation_id(self) -> Optional[str]:
+        """Get correlation ID from metadata."""
+        return self.metadata.get("correlation_id")
+
+    @property
+    def email(self) -> Optional[str]:
+        """Get email from metadata."""
+        return self.metadata.get("email")
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage/logging."""
@@ -133,8 +145,38 @@ async def log_security_event(event: SecurityEvent) -> None:
     await _store_event_in_redis(event)
 
 
+def _build_security_event(
+    *,
+    event_type: SecurityEventType,
+    user_id: Optional[str] = None,
+    email: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    severity: SecurityEventSeverity = SecurityEventSeverity.INFO,
+    message: str = "",
+    metadata: Optional[Dict[str, Any]] = None,
+    correlation_id: Optional[str] = None,
+) -> SecurityEvent:
+    """Build a SecurityEvent from keyword arguments."""
+    combined_metadata = metadata or {}
+    if email:
+        combined_metadata["email"] = email
+    if correlation_id:
+        combined_metadata["correlation_id"] = correlation_id
+    return SecurityEvent(
+        event_type=event_type,
+        user_id=user_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        severity=severity,
+        message=message,
+        metadata=combined_metadata,
+    )
+
+
 async def log_security_event_kwargs(
     event_type: SecurityEventType,
+    *,
     user_id: Optional[str] = None,
     email: Optional[str] = None,
     ip_address: Optional[str] = None,
@@ -158,7 +200,7 @@ async def log_security_event_kwargs(
         metadata: Additional metadata.
         correlation_id: Correlation ID for tracing.
     """
-    event = SecurityEvent(
+    event = _build_security_event(
         event_type=event_type,
         user_id=user_id,
         email=email,
@@ -166,7 +208,7 @@ async def log_security_event_kwargs(
         user_agent=user_agent,
         severity=severity,
         message=message,
-        metadata=metadata or {},
+        metadata=metadata,
         correlation_id=correlation_id,
     )
     await log_security_event(event)
@@ -187,7 +229,28 @@ async def _store_event_in_redis(event: SecurityEvent) -> None:
         logger.error("Failed to store security event in Redis", error=str(e))
 
 
+def _build_event_filter(
+    *,
+    limit: int = 100,
+    offset: int = 0,
+    event_type: Optional[SecurityEventType] = None,
+    user_id: Optional[str] = None,
+    severity: Optional[SecurityEventSeverity] = None,
+    since: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Build filter parameters for querying security events."""
+    return {
+        "limit": limit,
+        "offset": offset,
+        "event_type": event_type,
+        "user_id": user_id,
+        "severity": severity,
+        "since": since,
+    }
+
+
 async def get_security_events(
+    *,
     limit: int = 100,
     offset: int = 0,
     event_type: Optional[SecurityEventType] = None,
@@ -214,7 +277,9 @@ async def get_security_events(
     try:
         # Get all events (we'll filter in memory since Redis lists don't support query)
         # For production with high volume, consider using Redis Streams or a separate DB
-        events_json = await redis_client.lrange(SECURITY_LOG_KEY, offset, offset + limit * 10 - 1)
+        events_json = await redis_client.lrange(
+            SECURITY_LOG_KEY, offset, offset + limit * 10 - 1
+        )
 
         events = []
         for event_json in events_json:
@@ -235,14 +300,11 @@ async def get_security_events(
                 events.append(SecurityEvent(
                     event_type=SecurityEventType(data["event_type"]),
                     user_id=data.get("user_id"),
-                    email=data.get("email"),
                     ip_address=data.get("ip_address"),
                     user_agent=data.get("user_agent"),
                     severity=SecurityEventSeverity(data.get("severity", "info")),
                     message=data.get("message", ""),
                     metadata=data.get("metadata", {}),
-                    timestamp=datetime.fromisoformat(data["timestamp"]),
-                    correlation_id=data.get("correlation_id"),
                 ))
 
                 if len(events) >= limit:
@@ -258,6 +320,7 @@ async def get_security_events(
 
 
 async def get_security_event_count(
+    *,
     event_type: Optional[SecurityEventType] = None,
     user_id: Optional[str] = None,
     severity: Optional[SecurityEventSeverity] = None,
@@ -266,13 +329,20 @@ async def get_security_event_count(
     """Get count of security events matching filters."""
     # For accurate count, we'd need to scan all events
     # This is a simplified version
-    events = await get_security_events(limit=10000, event_type=event_type, user_id=user_id, severity=severity, since=since)
+    events = await get_security_events(
+        limit=10000,
+        event_type=event_type,
+        user_id=user_id,
+        severity=severity,
+        since=since,
+    )
     return len(events)
 
 
 # Convenience functions for common events
 
 async def log_login_success(
+    *,
     user_id: str,
     email: str,
     ip: str,
@@ -280,7 +350,7 @@ async def log_login_success(
     correlation_id: Optional[str] = None,
 ) -> None:
     """Log successful login."""
-    await log_security_event(SecurityEvent(
+    await log_security_event(_build_security_event(
         event_type=SecurityEventType.LOGIN_SUCCESS,
         user_id=user_id,
         email=email,
@@ -293,6 +363,7 @@ async def log_login_success(
 
 
 async def log_login_failure(
+    *,
     email: str,
     ip: str,
     user_agent: str,
@@ -300,7 +371,7 @@ async def log_login_failure(
     correlation_id: Optional[str] = None,
 ) -> None:
     """Log failed login attempt."""
-    await log_security_event(SecurityEvent(
+    await log_security_event(_build_security_event(
         event_type=SecurityEventType.LOGIN_FAILURE,
         email=email,
         ip_address=ip,
@@ -313,13 +384,14 @@ async def log_login_failure(
 
 
 async def log_logout(
+    *,
     user_id: str,
     email: str,
     ip: str,
     correlation_id: Optional[str] = None,
 ) -> None:
     """Log user logout."""
-    await log_security_event(SecurityEvent(
+    await log_security_event(_build_security_event(
         event_type=SecurityEventType.LOGOUT,
         user_id=user_id,
         email=email,
@@ -331,13 +403,14 @@ async def log_logout(
 
 
 async def log_password_change(
+    *,
     user_id: str,
     email: str,
     ip: str,
     correlation_id: Optional[str] = None,
 ) -> None:
     """Log password change."""
-    await log_security_event(SecurityEvent(
+    await log_security_event(_build_security_event(
         event_type=SecurityEventType.PASSWORD_CHANGE,
         user_id=user_id,
         email=email,
@@ -349,6 +422,7 @@ async def log_password_change(
 
 
 async def log_account_locked(
+    *,
     user_id: str,
     email: str,
     ip: str,
@@ -356,7 +430,7 @@ async def log_account_locked(
     correlation_id: Optional[str] = None,
 ) -> None:
     """Log account lockout."""
-    await log_security_event(SecurityEvent(
+    await log_security_event(_build_security_event(
         event_type=SecurityEventType.ACCOUNT_LOCKED,
         user_id=user_id,
         email=email,
@@ -369,6 +443,7 @@ async def log_account_locked(
 
 
 async def log_session_revoked(
+    *,
     user_id: str,
     email: str,
     session_id: str,
@@ -377,7 +452,7 @@ async def log_session_revoked(
     correlation_id: Optional[str] = None,
 ) -> None:
     """Log session revocation."""
-    await log_security_event(SecurityEvent(
+    await log_security_event(_build_security_event(
         event_type=SecurityEventType.SESSION_REVOKED,
         user_id=user_id,
         email=email,
@@ -390,6 +465,7 @@ async def log_session_revoked(
 
 
 async def log_all_sessions_revoked(
+    *,
     user_id: str,
     email: str,
     count: int,
@@ -397,7 +473,7 @@ async def log_all_sessions_revoked(
     correlation_id: Optional[str] = None,
 ) -> None:
     """Log all sessions revoked."""
-    await log_security_event(SecurityEvent(
+    await log_security_event(_build_security_event(
         event_type=SecurityEventType.ALL_SESSIONS_REVOKED,
         user_id=user_id,
         email=email,

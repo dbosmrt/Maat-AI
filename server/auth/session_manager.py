@@ -32,9 +32,22 @@ class SessionInfo:
     device_info: str
     created_at: int
     last_activity: int
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    is_current: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def ip_address(self) -> Optional[str]:
+        """Get IP address from metadata."""
+        return self.metadata.get("ip_address")
+
+    @property
+    def user_agent(self) -> Optional[str]:
+        """Get user agent from metadata."""
+        return self.metadata.get("user_agent")
+
+    @property
+    def is_current(self) -> bool:
+        """Get current session flag from metadata."""
+        return self.metadata.get("is_current", False)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -57,6 +70,13 @@ def _get_user_sessions_key(user_id: str) -> str:
 def _get_session_detail_key(session_id: str) -> str:
     """Get Redis key for session details."""
     return f"{SESSION_DETAIL_PREFIX}{session_id}"
+
+
+def _ensure_str(value: bytes | str) -> str:
+    """Ensure value is a string (decode bytes if needed)."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return value
 
 
 def _generate_session_id() -> str:
@@ -95,7 +115,7 @@ def _parse_device_info(user_agent: str, ip: str) -> str:
 
 async def create_session(
     user_id: str,
-    request = None,
+    request=None,
     device_info: Optional[str] = None,
     ttl: Optional[int] = None,
 ) -> SessionInfo:
@@ -153,8 +173,10 @@ async def create_session(
             device_info=device_info,
             created_at=now,
             last_activity=now,
-            ip_address=ip_address,
-            user_agent=user_agent,
+            metadata={
+                "ip_address": ip_address or "",
+                "user_agent": user_agent or "",
+            },
         )
 
     except Exception as e:
@@ -180,14 +202,22 @@ async def get_session(session_id: str) -> Optional[SessionInfo]:
         if not data:
             return None
 
+        # Redis returns bytes, decode to str
+        def _decode(value: bytes | str) -> str:
+            if isinstance(value, bytes):
+                return value.decode("utf-8")
+            return value
+
         return SessionInfo(
             session_id=session_id,
-            user_id=data.get("user_id", ""),
-            device_info=data.get("device_info", ""),
-            created_at=int(data.get("created_at", 0)),
-            last_activity=int(data.get("last_activity", 0)),
-            ip_address=data.get("ip_address") or None,
-            user_agent=data.get("user_agent") or None,
+            user_id=_decode(data.get("user_id", "")),
+            device_info=_decode(data.get("device_info", "")),
+            created_at=int(_decode(data.get("created_at", "0"))),
+            last_activity=int(_decode(data.get("last_activity", "0"))),
+            metadata={
+                "ip_address": _decode(data.get("ip_address", "")),
+                "user_agent": _decode(data.get("user_agent", "")),
+            },
         )
     except Exception as e:
         logger.error("Failed to get session", error=str(e), session_id=session_id[:8])
@@ -238,9 +268,12 @@ async def list_user_sessions(user_id: str, current_session_id: Optional[str] = N
 
         sessions = []
         for session_id in session_ids:
+            # Decode session_id from bytes if needed
+            if isinstance(session_id, bytes):
+                session_id = session_id.decode("utf-8")
             session = await get_session(session_id)
             if session:
-                session.is_current = (session_id == current_session_id)
+                session.metadata["is_current"] = session_id == current_session_id
                 sessions.append(session)
 
         return sessions
@@ -306,6 +339,10 @@ async def revoke_all_sessions(user_id: str, except_session_id: Optional[str] = N
         revoked = 0
 
         for session_id in session_ids:
+            if isinstance(session_id, bytes):
+                session_id = session_id.decode("utf-8")
+            if except_session_id and isinstance(except_session_id, bytes):
+                except_session_id = except_session_id.decode("utf-8")
             if session_id != except_session_id:
                 session_key = _get_session_detail_key(session_id)
                 script = await get_session_remove_script(redis_client)

@@ -191,7 +191,12 @@ async def register(request: RegisterRequest, http_request: Request):
     # Check if user already exists
     existing_user = await User.find_one({"email": request.email.lower()})
     if existing_user:
-        await log_login_failure(request.email, client_ip, user_agent, "Email already registered")
+        await log_login_failure(
+            email=request.email,
+            ip=client_ip,
+            user_agent=user_agent,
+            reason="Email already registered",
+        )
         logger.warning("Registration failed: Email already registered", email=request.email)
         raise ConflictError("User", request.email)
 
@@ -220,7 +225,7 @@ async def register(request: RegisterRequest, http_request: Request):
     tokens = create_token_pair(str(user.id))
 
     # Create initial session
-    _session = await create_session(str(user.id), http_request)
+    await create_session(str(user.id), http_request)
 
     # Prepare response
     user_response = UserResponse(
@@ -236,10 +241,15 @@ async def register(request: RegisterRequest, http_request: Request):
     token_response = TokenResponse(
         access_token=tokens["access_token"],
         refresh_token=tokens["refresh_token"],
-        expires_in=tokens["access_expires_in"],
+        expires_in=int(tokens["access_expires_in"]),
     )
 
-    await log_login_success(str(user.id), user.email, client_ip, user_agent)
+    await log_login_success(
+        user_id=str(user.id),
+        email=user.email,
+        ip=client_ip,
+        user_agent=user_agent,
+    )
 
     return AuthResponse(user=user_response, tokens=token_response)
 
@@ -264,19 +274,34 @@ async def login(request: LoginRequest, http_request: Request):
     # Find user
     user = await User.find_one({"email": request.email.lower()})
     if not user:
-        await log_login_failure(request.email, client_ip, user_agent, "User not found")
+        await log_login_failure(
+            email=request.email,
+            ip=client_ip,
+            user_agent=user_agent,
+            reason="User not found",
+        )
         logger.warning("Login failed: User not found", email=request.email)
         raise AuthenticationError("Invalid credentials")
 
     # Verify password
     if not verify_password(request.password, user.password_hash):
-        await log_login_failure(request.email, client_ip, user_agent, "Invalid password")
+        await log_login_failure(
+            email=request.email,
+            ip=client_ip,
+            user_agent=user_agent,
+            reason="Invalid password",
+        )
         logger.warning("Login failed: Invalid password", email=request.email, user_id=str(user.id))
         raise AuthenticationError("Invalid credentials")
 
     # Check if user is active
     if not user.is_active:
-        await log_login_failure(request.email, client_ip, user_agent, "Account deactivated")
+        await log_login_failure(
+            email=request.email,
+            ip=client_ip,
+            user_agent=user_agent,
+            reason="Account deactivated",
+        )
         logger.warning("Login failed: Account deactivated", user_id=str(user.id))
         raise AuthenticationError("Account is deactivated")
 
@@ -290,7 +315,7 @@ async def login(request: LoginRequest, http_request: Request):
     tokens = create_token_pair(str(user.id))
 
     # Create session
-    _session = await create_session(str(user.id), http_request)
+    await create_session(str(user.id), http_request)
 
     # Prepare response
     user_response = UserResponse(
@@ -306,10 +331,15 @@ async def login(request: LoginRequest, http_request: Request):
     token_response = TokenResponse(
         access_token=tokens["access_token"],
         refresh_token=tokens["refresh_token"],
-        expires_in=tokens["access_expires_in"],
+        expires_in=int(tokens["access_expires_in"]),
     )
 
-    await log_login_success(str(user.id), user.email, client_ip, user_agent)
+    await log_login_success(
+        user_id=str(user.id),
+        email=user.email,
+        ip=client_ip,
+        user_agent=user_agent,
+    )
 
     return AuthResponse(user=user_response, tokens=token_response)
 
@@ -375,7 +405,11 @@ async def logout(
     # Tokens are stateless but we could add to blacklist if needed
     # For now, session revocation handles the logout
 
-    await log_logout(str(user.id), user.email, http_request.client.host if http_request.client else "unknown")
+    await log_logout(
+        user_id=str(user.id),
+        email=user.email,
+        ip=http_request.client.host if http_request.client else "unknown",
+    )
 
     return MessageResponse(message="Logged out successfully")
 
@@ -444,7 +478,7 @@ async def reset_password(request: PasswordResetConfirmRequest, http_request: Req
     if not payload:
         await log_security_event_kwargs(
             event_type=SecurityEventType.PASSWORD_RESET_FAILURE,
-            email=request.email,
+            email=payload.get("email", "unknown"),
             ip_address=client_ip,
             message="Invalid or expired reset token used",
             severity=SecurityEventSeverity.WARNING,
@@ -472,8 +506,17 @@ async def reset_password(request: PasswordResetConfirmRequest, http_request: Req
 
     logger.info("Password reset successful", user_id=user_id)
 
-    await log_password_change(str(user.id), user.email, client_ip)
-    await log_all_sessions_revoked(str(user.id), user.email, revoked_count, client_ip)
+    await log_password_change(
+        user_id=str(user.id),
+        email=user.email,
+        ip=client_ip,
+    )
+    await log_all_sessions_revoked(
+        user_id=str(user.id),
+        email=user.email,
+        count=revoked_count,
+        ip=client_ip,
+    )
 
     return MessageResponse(message="Password has been reset successfully")
 
@@ -521,8 +564,17 @@ async def change_password(
 
     logger.info("Password changed successfully", user_id=str(user.id))
 
-    await log_password_change(str(user.id), user.email, client_ip)
-    await log_all_sessions_revoked(str(user.id), user.email, revoked_count, client_ip)
+    await log_password_change(
+        user_id=str(user.id),
+        email=user.email,
+        ip=client_ip,
+    )
+    await log_all_sessions_revoked(
+        user_id=str(user.id),
+        email=user.email,
+        count=revoked_count,
+        ip=client_ip,
+    )
 
     return MessageResponse(message="Password changed successfully")
 
@@ -625,7 +677,12 @@ async def revoke_session_endpoint(
     if not success:
         raise ResourceNotFoundError("Session", session_id)
 
-    await log_session_revoked(str(user.id), user.email, session_id, client_ip)
+    await log_session_revoked(
+        user_id=str(user.id),
+        email=user.email,
+        session_id=session_id,
+        ip=client_ip,
+    )
 
     return MessageResponse(message="Session revoked successfully")
 
@@ -643,7 +700,12 @@ async def revoke_all_sessions_endpoint(
 
     revoked_count = await revoke_all_sessions(str(user.id), except_session_id=current_session)
 
-    await log_all_sessions_revoked(str(user.id), user.email, revoked_count, client_ip)
+    await log_all_sessions_revoked(
+        user_id=str(user.id),
+        email=user.email,
+        count=revoked_count,
+        ip=client_ip,
+    )
 
     return MessageResponse(message=f"Revoked {revoked_count} other sessions")
 
@@ -667,7 +729,7 @@ async def create_api_key(
     api_key = f"maat_{secrets.token_urlsafe(32)}"
     key_hash = hash_password(api_key)  # Store hashed
 
-    expires_at = datetime.utcnow() + timedelta(days=request.expires_in_days)
+    expires_at = datetime.utcnow() + timedelta(days=request.expires_in_days or 365)
 
     # Store in user settings or separate collection
     # For simplicity, store in user metadata

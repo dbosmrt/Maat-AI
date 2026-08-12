@@ -377,7 +377,7 @@ async def revoke_token(token: str) -> bool:
     return False
 
 
-def create_token_pair(user_id: str) -> dict[str, str]:
+def create_token_pair(user_id: str) -> dict[str, str | int]:
     """
     Create both access and refresh tokens for a user.
 
