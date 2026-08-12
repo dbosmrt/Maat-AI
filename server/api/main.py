@@ -29,6 +29,7 @@ from server.auth.router import router as auth_router
 from server.chat.router import router as chat_router
 from server.settings.router import router as settings_router
 from server.api.routes import router as legacy_router  # Legacy chat endpoint
+from server.auth.redis_client import init_redis, close_redis
 
 logger = get_logger(__name__)
 
@@ -39,6 +40,10 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Ma'at Legal AI API Gateway...")
     await init_database()
+
+    # Initialize Redis for rate limiting
+    logger.info("Initializing Redis connection pool...")
+    await init_redis()
 
     # Initialize LangSmith tracing if configured
     if settings.LANGSMITH_TRACING_V2 and settings.LANGSMITH_API_KEY:
@@ -53,6 +58,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Ma'at Legal AI API Gateway...")
     await close_database()
+    await close_redis()
 
 
 app = FastAPI(
